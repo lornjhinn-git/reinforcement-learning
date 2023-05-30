@@ -134,7 +134,7 @@ def train(env, save_to = 'models/model3.dump'):
 			use_epsilon = 0.0
 		action, action_v = policy(values, current_state, epsilon = use_epsilon, verbose=(episoden==299))
 		total_reward = 0
-		#step = 0
+		# step = 0
 		deltas = []
 
 		while (not env.over):

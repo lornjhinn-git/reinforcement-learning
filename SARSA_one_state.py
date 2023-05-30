@@ -9,8 +9,11 @@ class SARSAAgent:
         self.discount_factor = discount_factor
         self.epsilon = epsilon
         self.q_table = None
+        self.reward_table = None
         self.num_states = df_train['encoded_time'].nunique()
-        self.num_actions = 2
+        self.num_actions = 3
+        self.isHolding = False 
+        self.hold_unit = 0
 
     def initialize_q_table(self, df):
 
@@ -26,7 +29,10 @@ class SARSAAgent:
         df_buy = pd.pivot_table(df_buy, values='buy_rewards',
                                 index='encoded_time', columns='action').reset_index()
 
-        reward_array = df_sell.merge(df_buy, on='encoded_time', how='inner')[['sell', 'buy']].values
+        # reward_array = df_sell.merge(df_buy, on='encoded_time', how='inner')[['sell', 'buy']].values
+        df_rewards = df_sell.merge(df_buy, on='encoded_time', how='inner')[['sell', 'buy']]
+        df_rewards['no_action'] = 0
+        reward_array = df_rewards[['sell', 'buy', 'no_action']].values
         # Ensure the array has the desired shape (n_time, n_action) by padding with zeros if necessary
         if reward_array.shape != (self.num_states, self.num_actions):
             padded_array = np.zeros((self.num_states, self.num_actions))
@@ -36,7 +42,8 @@ class SARSAAgent:
         # Display the resulting array
         print(reward_array)
 
-        self.q_table = reward_array
+        self.reward_table = reward_array
+        self.q_table = np.zeros_like(reward_array)
 
 
     def get_action(self, state):
