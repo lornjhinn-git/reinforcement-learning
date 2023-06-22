@@ -24,7 +24,7 @@ alpha = 0.5
 
 MAZE_SIZE = 8
 EPISODES = 300
-#assert EPISODES > MAZE_SIZE**4
+# assert EPISODES > MAZE_SIZE**4
 number_before_metrics = 10
 GOAL = [2,0]
 ACTIONS = ['UP','DOWN','RIGHT','LEFT']
