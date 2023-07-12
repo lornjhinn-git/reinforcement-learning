@@ -40,7 +40,7 @@ class SARSAAgent:
             reward_array = padded_array
 
         # Display the resulting array
-        print(reward_array)
+        # print(reward_array)
 
         self.reward_table = reward_array
         self.q_table = np.zeros_like(reward_array)
