@@ -1,7 +1,6 @@
-import pandas as pd 
-import numpy as np
-import random
-import math
+# Import general package 
+from ..sarsa import *
+from ..constants import constants as Constantor
 from datetime import date 
 from sklearn.preprocessing import LabelEncoder 
 
@@ -12,7 +11,7 @@ from sklearn.preprocessing import LabelEncoder
 # 3. time (12 am - 12 pm every 5 min)
 # 4. actions (buy, sell, no action)
 
-def get_day_of_week(df):
+def get_day_of_week(df) -> pd.DataFrame:
     """
     Returns the name of the day of the week for the given day number (0-6)
     """
@@ -22,7 +21,7 @@ def get_day_of_week(df):
     return df 
 
 
-def set_action(df, optimum_sell_rewards=15, optimum_buy_rewards=15):
+def set_action(df, optimum_sell_rewards=15, optimum_buy_rewards=15) -> pd.DataFrame:
     """
     Adds a new column called 'price_diff' to the given DataFrame,
     containing the difference between the current row's close price and
@@ -49,7 +48,7 @@ def set_action(df, optimum_sell_rewards=15, optimum_buy_rewards=15):
 
 
 # normal distribution optimum bin
-def get_optimal_normal_distribution_num_bins(df):
+def get_optimal_normal_distribution_num_bins(df) -> pd.DataFrame:
     """
     Estimates the optimal number of bins for the 'volume_trade' column
     of the given DataFrame using the Freedman-Diaconis rule, and returns
@@ -70,7 +69,7 @@ def get_optimal_normal_distribution_num_bins(df):
 
 
 # power law optimum bin 
-def get_optimal_pareto_distribution_num_bins(df):
+def get_optimal_pareto_distribution_num_bins(df) -> pd.DataFrame:
     """
     Estimates the optimal number of bins for the 'volume_trade' column
     of the given DataFrame using the Sturges method for power law distributions,
@@ -87,10 +86,15 @@ def get_optimal_pareto_distribution_num_bins(df):
     return num_bins
 
 
-def pareto_distribution_bins(df, num_bins):
+def pareto_distribution_bins(df) -> pd.DataFrame:
     """Creates power law bins for the 'volume_trade' column of the given
     DataFrame using the qcut function, and returns the updated DataFrame.
     """
+
+    # Compute the optimal number of bins for quantiles splitting
+    # num_bins = get_optimal_pareto_distribution_num_bins(df)
+    num_bins = Constantor.PARETO_NUM_BINS
+
     # Compute the quantiles of the 'volume_trade' column using a power law distribution
     quantiles = pd.qcut(df['amount'], num_bins, labels=False, duplicates='drop')
 
@@ -101,7 +105,7 @@ def pareto_distribution_bins(df, num_bins):
     return df
 
 
-def encode_time(df):
+def encode_time(df) -> pd.DataFrame:
     """Encodes the time in the given DataFrame as a string representing the time
     in sequential order (hour-minute-second), and returns the updated DataFrame.
     """
@@ -129,20 +133,17 @@ def encode_time(df):
     return df
 
 
-# Create a custom aggregation function to fill in values based on conditions
-def fill_values(column):
-    if column[column > 0].empty:
-        return None
-    return column[column > 0].values[0]
-
-
-def convert_to_first_day_of_month(df, date_column_name):
+def convert_to_first_day_of_month(df) -> pd.DataFrame:
     # convert to datetime format
+    date_column_name = 'date'
+    assign_column_name = 'starting_month'
     starting_month_list = df[date_column_name].apply(lambda x: date(x.year, x.month, 1))
-    return starting_month_list
+    df.loc[:, assign_column_name] = starting_month_list
+
+    return df
 
 
-def get_week_of_month(df, date_column_name) -> list:
+def get_week_of_month(df) -> pd.DataFrame:
 
     def compute_week_of_month(date_value):
         first_day = date(date_value.year, date_value.month, 1)
@@ -150,6 +151,83 @@ def get_week_of_month(df, date_column_name) -> list:
         week_of_month = (date_value.day + offset - 1) // 7 + 1
         return week_of_month
 
+    date_column_name = 'date'
+    assign_column_name = 'week_of_month'
     week_of_month_list = df[date_column_name].apply(lambda x: compute_week_of_month(x))
+    df.loc[:, assign_column_name] = week_of_month_list
 
-    return week_of_month_list
+    return df
+
+
+def get_daily_average_trade_total_price(df) -> pd.DataFrame:
+    df = df[Constantor.PRICE_COLS].groupby(Constantor.GROUPBY_KEYS).sum()
+    df['daily_average_trade_total_price'] = df['trade_total_price'] / df['trade_volumes']
+    df = df.drop(columns=['trade_volumes', 'trade_total_price'])
+    return df
+
+
+# Create a custom aggregation function to fill in values based on conditions
+def fill_values(column):
+    if column[column > 0].empty:
+        return None
+    return column[column > 0].values[0]
+
+
+def create_reward_table(df_reward_stats, verbose=True) -> tuple[np.array, np.array]:
+    df_sell_rewards = df_reward_stats['sell_rewards'][['mean']].copy()
+    df_buy_rewards = df_reward_stats['buy_rewards'][['mean']].copy()
+    df_sell_rewards.columns = ['sell_rewards']
+    df_buy_rewards.columns = ['buy_rewards']
+    df_nested_rewards = pd.concat([df_reward_stats[['week_of_month', 'local_numeric_day', 'encoded_time']], df_sell_rewards, df_buy_rewards], axis=1)
+
+    # rename column to remove the tuple-like hierachy syntax for easier retrieve
+    rename_cols = ['week_of_month', 'local_numeric_day', 'encoded_time', 'sell_rewards', 'buy_rewards']
+    df_nested_rewards.columns = rename_cols
+
+    df_pivoted_rewards = pd.pivot_table(df_nested_rewards, values=['sell_rewards', 'buy_rewards'], index=['week_of_month', 'local_numeric_day', 'encoded_time'],
+                                aggfunc=fill_values).reset_index()
+    df_pivoted_rewards = df_pivoted_rewards.rename(columns={'sell_rewards': 'sell_action', 'buy_rewards': 'buy_action'})
+
+    # assign reverse action reward for NaN value 
+    df_pivoted_rewards['buy_action'] = df_pivoted_rewards['buy_action'].fillna(df_pivoted_rewards['sell_action']*-1)
+    df_pivoted_rewards['sell_action'] = df_pivoted_rewards['sell_action'].fillna(df_pivoted_rewards['buy_action']*-1)
+    df_pivoted_rewards['no_action'] = 0
+
+    encoder = LabelEncoder()
+    df_pivoted_rewards['label_encoded_time'] = encoder.fit_transform(df_pivoted_rewards[['encoded_time']])
+
+    # get the unique value of each column for each state 
+    state_unique_counts = df_pivoted_rewards.nunique()
+
+    # initialize shape size
+    state_array_shape = tuple(state_unique_counts[:Constantor.NUM_ACTION])
+    # add 3 unique actions 
+    state_array_shape += (Constantor.NUM_ACTION ,)
+    print("State array shape:", state_array_shape)
+
+    # create the array with the initialized shape size 
+    state_array = np.zeros(state_array_shape)
+
+    # start padding reward value into each state respectively
+    # Iterate over the rows of the DataFrame
+    for index, row in df_pivoted_rewards.iterrows():
+        week_index = row['week_of_month']-1
+        day_index = row['local_numeric_day']-1
+        time_index = row['label_encoded_time']-1
+        value = [row['buy_action'], row['sell_action'], row['no_action']]
+        state_array[week_index, day_index, time_index] = value
+
+    # assign state array to be reward array for easier reference
+    reward_table = state_array.copy()
+    Q = np.zeros(reward_table.shape)
+
+    if verbose:
+        print("\nReward table generated!")
+        print("Reward table size:", reward_table.shape)
+        print("Reward table value peek:", reward_table[0,0,0,0])
+
+        print("\nQ table initialized!")
+        print("Q table size:", Q.shape)
+        print("Q table value peek:", Q[0,0,0,0])
+
+    return reward_table, Q
