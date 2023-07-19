@@ -70,7 +70,7 @@ def update_q_value(state:tuple, action:int, rewards:list, rewards_value:float, n
 	new_q = current_q + Sarsa.learning_rate * (rewards_value + Sarsa.gamma * next_q - current_q)
     
     # Update the Q-value in the Q-table
-	Q[state][Constantor.ACTION_DICT.get(action)] = new_q
+	Sarsa.Q[state][Constantor.ACTION_DICT.get(action)] = new_q
 	
     # Check if the (state, action) pair exists in the Q-table
     # if (state, action) not in Q:
@@ -135,7 +135,7 @@ def train(data: np.array, verbose=True) -> dict:
 		else:
 			Sarsa.isHolding = False
 
-		rewards_value = Sarsa.Sarsa.reward_table[current_state][action]
+		rewards_value = Sarsa.reward_table[current_state][action]
 		total_rewards += rewards_value
 
 		steps.append(action)

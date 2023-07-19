@@ -8,10 +8,11 @@ class ParentSARSA:
         self.discount_factor: Optional[float] = 0.1
         self.epsilon: Optional[float] = 0.1
         self.gamma: Optional[float] = 0.9
-        self.num_episodes: Optional[int] = 100
+        self.num_episodes: Optional[int] = 100000
         self.data: Optional[pd.Dataframe] = None
         self.Q: Optional[np.array] = None
         self.reward_table: Optional[np.array] = None
+        self.isHolding = False
 
         if verbose:
             print("Parent SARSA inherited!")
