@@ -1,23 +1,27 @@
 from .. import sarsa
 from ..constants import constants as Constantor
-from ..data import preprocess as Preprocessor
+from ..data import preprocess as Preprocessor, utils as Utilator
 import pandas as pd 
 import numpy as np
 from sqlalchemy import create_engine
 from functools import partial
+from datetime import datetime
 import math
 import random
+import joblib 
 
 global Sarsa
 Sarsa = sarsa.SARSA()
 
 # Generate the sample data
-def train_test_split(df) -> tuple[pd.DataFrame, pd.DataFrame]:
-
-    train_data = df[:math.floor(df.shape[0]*Constantor.TRAIN_SPLIT)]
-    test_data = df[train_data.shape[0]:]
-
-    return train_data, test_data
+def train_test_split(df):
+    global Sarsa
+    Sarsa.train_data = df[:math.floor(df.shape[0]*Constantor.TRAIN_SPLIT)]
+    Sarsa.test_data = df[Sarsa.train_data.shape[0]:]
+    Sarsa.train_data.to_csv("train_data.csv")
+    Sarsa.train_data.to_csv(f"train_data_{Utilator.get_formatted_date()}.csv")
+    Sarsa.train_data.to_csv("test_data.csv")
+    Sarsa.train_data.to_csv(f"test_data_{Utilator.get_formatted_date()}.csv")
 
 
 def policy(state, verbose = False) -> tuple[int, float]: 
@@ -26,10 +30,10 @@ def policy(state, verbose = False) -> tuple[int, float]:
 	global Sarsa
 	
 	# update allowed actions everytime based on agent current holding unit 
-	if Sarsa.isHolding == False: # indicate can buy/no action but cannot sell
-		allowed_actions = ['buy', 'no_action']
-	else:
+	if state[0] == 1: # if in holding state, then only can sell or no action
 		allowed_actions = ['sell', 'no_action']
+	else:
+		allowed_actions = ['buy', 'no_action']
 
 	random.shuffle(allowed_actions)
 
@@ -111,11 +115,13 @@ def preprocess(df, verbose=True) -> pd.DataFrame:
 	return df
 
 
-def train(data: np.array, verbose=True) -> dict:
+def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 	environments_list = []
 	total_rewards_list = []
 	rewards_list = []
 	steps_list = []
+
+	global Sarsa
 
 	for episode in range(Sarsa.num_episodes):
 
@@ -127,14 +133,35 @@ def train(data: np.array, verbose=True) -> dict:
 		environments = []
 		rewards = []
 
-		current_state = (0,0,0) # Starting state
-		action, action_value = policy(current_state)
-		# update upcoming allowed actions
-		if action == 0:
-			Sarsa.isHolding = True
-		else:
-			Sarsa.isHolding = False
+		# # Randomize the holding status to determine the starting state
+		# Sarsa.isHolding = random.random() < 0.5
+		# if Sarsa.isHolding == True:
+		# 	current_state = (1,0,0,0) # Starting state
+		# else:
+		# 	current_state = (0,0,0,0)
+		# action, action_value = policy(current_state)
 
+		# # update upcoming allowed actions and new state
+		# if action == 0:
+		# 	Sarsa.isHolding = True
+		# 	# current_state = (1,) + current_state[1:]
+		# else:
+		# 	Sarsa.isHolding = False
+		# 	# current_state = (0,) + current_state[1:]
+
+		# rewards_value = Sarsa.reward_table[current_state][action]
+		# total_rewards += rewards_value
+
+		# Randomize the starting state to be holding or not holding
+		if random.random() < 0.5: 
+			current_state = (0,0,0,0)
+		else:
+			current_state = (1,0,0,0)
+
+		# the recommended action will be choosen from the allowed actions listS
+		action, action_value = policy(current_state)
+
+		# get the reward from the action taken in current state
 		rewards_value = Sarsa.reward_table[current_state][action]
 		total_rewards += rewards_value
 
@@ -145,41 +172,55 @@ def train(data: np.array, verbose=True) -> dict:
 		# when current state has not iterate until the last row of Q table
 		# while (current_state != (Sarsa.reward_table.shape[0],Sarsa.reward_table.shape[1],Sarsa.reward_table.shape[2])):
 
-		for month in range(Sarsa.reward_table.shape[0]):
-			for day in range(Sarsa.reward_table.shape[1]):
-				for time in range(Sarsa.reward_table.shape[2]):
+		# dummy initialization for next state
+		next_state = current_state
 
-					# when iterating (0,0) start from (0,0,1) to (0,0,287) because (0,0,0) already initialized on top
-					if current_state[0] == 0 and current_state[1] == 0:
-						current_state = [month, day, time + 1]
+		for month in range(0, Sarsa.reward_table.shape[1]):
+			for day in range(0, Sarsa.reward_table.shape[2]):
+				for time in range(0, Sarsa.reward_table.shape[3]):
+
+					# only modify the next state to start on 2nd state when the incoming state 
+					# is (0,0,0,0) or (1,0,0,0)
+					if current_state[1:] == (0,0,0):
+						next_state = list(next_state)
+						next_state[3] = 1
+						next_state = tuple(next_state) # add 1 to time state if starting from (1,0,0,0) or (0,0,0,0)
 					else:
-						current_state = [month, day, time]
+						next_state = tuple([next_state[0], month, day, time])
 
-					current_state = tuple(current_state)
-					# print("Current state:", current_state)
-					# print("Current action:", action, action_value)
+					# second layer modification on state based on the current action
+					if action == 0: # buy, next state become holding state
+						next_state = (1,) + current_state[1:]
+					elif action == 1: # sell, next state become not holding state 
+						next_state = (0,) + current_state[1:]
+					else:  # if no action, then stick to the current holding state
+						print("No action")
+						pass
 
-					rewards_value = Sarsa.reward_table[current_state][action]
-					total_rewards += rewards_value
+					# current_state = tuple(current_state)
+					# action, action_value = policy(current_state)
+					# rewards_value = Sarsa.reward_table[current_state][action]
+					# total_rewards += rewards_value
 
-					# print("Total rewards:", total_rewards)
-
-					steps.append(action)
-					rewards.append(rewards_value)
-					environments.append(current_state)
+					# steps.append(action)
+					# rewards.append(rewards_value)
+					# environments.append(current_state)
 
 					# if not last row of state then + 1 else move up 1 level then + 1
-					if current_state[2] < Sarsa.reward_table.shape[2] - 1:
-						next_state = [current_state[0], current_state[1], current_state[2] + 1]
-						# print("In time:", current_state, next_state)
-					elif Sarsa.reward_table.shape[2] - 1 == current_state[2] and current_state[1] < Sarsa.reward_table.shape[1] - 1:
-						next_state = [current_state[0], current_state[1] + 1, current_state[2]]
-						# print("In day:", current_state,  next_state)
-					elif current_state[0] < Sarsa.reward_table.shape[0] - 1:
-						next_state = [current_state[0] + 1, current_state[1], current_state[2]]
-						# print("In month:", current_state, next_state)
+					# if current_state[3] < Sarsa.reward_table.shape[3] - 1:
+					# 	next_state = [current_state[0], current_state[1], current_state[2], current_state[3] + 1]
+					# 	if verbose:
+					# 		print("In time:", current_state, next_state)
+					# elif Sarsa.reward_table.shape[3] - 1 == current_state[3] and current_state[2] < Sarsa.reward_table.shape[1] - 1:
+					# 	next_state = [current_state[0], current_state[1], current_state[2] + 1, current_state[3]]
+					# 	if verbose:
+					# 		print("In day:", current_state,  next_state)
+					# elif current_state[1] < Sarsa.reward_table.shape[1] - 1:
+					# 	next_state = [current_state[0], current_state[1] + 1, current_state[2], current_state[3]]
+					# 	if verbose:
+					# 		print("In month:", current_state, next_state)
 					
-					next_state = tuple(next_state)
+					# next_state = tuple(next_state)
 					next_action, next_action_value = policy(next_state)
 
 					#print("End:", current_state, action, rewards, next_state, next_action)
@@ -187,10 +228,18 @@ def train(data: np.array, verbose=True) -> dict:
 
 					# print(f'After update:, action: {action}, action_value : {action_value}, next_action: {next_action}, next_action_value: {next_action_value}\n')
 					# update upcoming allowed actions
-					if next_action == 0:
-						Sarsa.isHolding = True
-					if next_action == 1:
-						Sarsa.isHolding = False
+					# if next_action == 0 and Sarsa.isHolding == False: # want to buy and is allow to buy
+					# 	Sarsa.isHolding = True
+					# 	next_state = (1,) + next_state[1:]
+					# if next_action == 1 and Sarsa.isHolding == True: # want to sell and is allow to sell
+					# 	Sarsa.isHolding = False
+					# 	next_state = (0,) + next_state[1:]
+
+					# if verbose:
+					print("\nCurrent state:", current_state)
+					# 	print("Current action:", action)
+					print("Next state:", next_state)
+					# 	print("Next action:", next_action)
 
 					current_state = next_state
 					action = next_action 
@@ -200,9 +249,39 @@ def train(data: np.array, verbose=True) -> dict:
 		rewards_list.append(rewards)
 		steps_list.append(steps)
 		environments_list.append(environments)
+	
+	Sarsa.value_dict['environments'] = environments_list 
+	Sarsa.value_dict['total_rewards'] = total_rewards_list
+	Sarsa.value_dict['rewards'] = rewards_list
+	Sarsa.value_dict['steps'] = steps_list
+
+	print("Finish training. All values are stored in Sarsa!")
 
 
-def main(verbose=True):
+def save_model():	
+	joblib.dump(Sarsa.Q, f'sarsa_crypto.joblib')
+	joblib.dump(Sarsa.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
+
+	for key in Sarsa.value_dict:
+		with open(f'{key}.txt', 'w') as file:
+			for item in Sarsa.value_dict.get(key):
+				file.write(str(item) + '\n')
+
+	print("Finish saving model and values dictionary!")
+
+
+def validate():
+	if Sarsa.Q is None:
+		# read in the saved model 
+		Sarsa.Q = joblib.load('sarsa_crypto.joblib')
+	
+	if Sarsa.test_data is None: 
+		Sarsa.test_data = pd.read_csv("test_data.csv")
+
+	df_preprocessed_test = preprocess(Sarsa.test_data)
+
+
+def main(verbose=True, isTraining=True):
 	SARSA = sarsa.SARSA()
 	engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{Constantor.DATABASE_NAME}')
 
@@ -210,10 +289,13 @@ def main(verbose=True):
 			   .query(f"period_type == '{Constantor.PERIOD_TYPE}'").reset_index()
 	
 	# Split data for train test
-	df_train, df_test = train_test_split(df)
-	df_preprocessed_train = preprocess(df_train)
-	train(df_preprocessed_train)
-	
+	if isTraining:
+		train_test_split(df)
+		df_preprocessed_train = preprocess(Sarsa.train_data)
+		train(df_preprocessed_train)
+		save_model()
+
+	validate()
 
 
 if __name__ == '__main__':

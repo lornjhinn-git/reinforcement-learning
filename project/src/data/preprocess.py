@@ -5,6 +5,7 @@ from datetime import date
 from sklearn.preprocessing import LabelEncoder 
 
 # features that need to be scaled
+print("OK")
 
 # 1. month (jan - dec)
 # 2. day (mon - sat)
@@ -217,17 +218,22 @@ def create_reward_table(df_reward_stats, verbose=True) -> tuple[np.array, np.arr
         value = [row['buy_action'], row['sell_action'], row['no_action']]
         state_array[week_index, day_index, time_index] = value
 
+    # 25/7/2023: Temporarily add in the two dimensional holding or not holding into the state.
+    # In the future, all this categorical or continuous factor should be written in a scalable way instead of so ad hoc
+    holding_array = np.array([[0,1]]).T
+    reward_table  = holding_array[:, np.newaxis, np.newaxis, np.newaxis, :] + state_array
+
     # assign state array to be reward array for easier reference
-    reward_table = state_array.copy()
     Q = np.zeros(reward_table.shape)
+
 
     if verbose:
         print("\nReward table generated!")
         print("Reward table size:", reward_table.shape)
-        print("Reward table value peek:", reward_table[0,0,0,0])
+        print("Reward table value peek:", reward_table[0,0,0,0,0])
 
         print("\nQ table initialized!")
         print("Q table size:", Q.shape)
-        print("Q table value peek:", Q[0,0,0,0])
+        print("Q table value peek:", Q[0,0,0,0,0])
 
     return reward_table, Q
