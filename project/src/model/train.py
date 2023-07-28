@@ -8,7 +8,7 @@ from functools import partial
 from datetime import datetime
 import math
 import random
-import joblib 
+import joblib
 
 global Sarsa
 Sarsa = sarsa.SARSA()
@@ -123,7 +123,7 @@ def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 
 	global Sarsa
 
-	for episode in range(Sarsa.num_episodes):
+	for episode in range(Sarsa.num_train_episodes):
 
 		print("\nEpisode:", episode)
 
@@ -190,11 +190,11 @@ def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 
 					# second layer modification on state based on the current action
 					if action == 0: # buy, next state become holding state
-						next_state = (1,) + current_state[1:]
+						next_state = (1,) + (month, day, time)
 					elif action == 1: # sell, next state become not holding state 
-						next_state = (0,) + current_state[1:]
+						next_state = (0,) + (month, day, time)
 					else:  # if no action, then stick to the current holding state
-						print("No action")
+						# print("No action")
 						pass
 
 					# current_state = tuple(current_state)
@@ -235,11 +235,11 @@ def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 					# 	Sarsa.isHolding = False
 					# 	next_state = (0,) + next_state[1:]
 
-					# if verbose:
-					print("\nCurrent state:", current_state)
-					# 	print("Current action:", action)
-					print("Next state:", next_state)
-					# 	print("Next action:", next_action)
+					if verbose:
+						print("\nCurrent state:", current_state)
+						print("Current action:", action)
+						print("Next state:", next_state)
+						print("Next action:", next_action)
 
 					current_state = next_state
 					action = next_action 
@@ -250,10 +250,10 @@ def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 		steps_list.append(steps)
 		environments_list.append(environments)
 	
-	Sarsa.value_dict['environments'] = environments_list 
-	Sarsa.value_dict['total_rewards'] = total_rewards_list
-	Sarsa.value_dict['rewards'] = rewards_list
-	Sarsa.value_dict['steps'] = steps_list
+	Sarsa.train_value_dict['environments'] = environments_list 
+	Sarsa.train_value_dict['total_rewards'] = total_rewards_list
+	Sarsa.train_value_dict['rewards'] = rewards_list
+	Sarsa.train_value_dict['steps'] = steps_list
 
 	print("Finish training. All values are stored in Sarsa!")
 
@@ -262,9 +262,9 @@ def save_model():
 	joblib.dump(Sarsa.Q, f'sarsa_crypto.joblib')
 	joblib.dump(Sarsa.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
 
-	for key in Sarsa.value_dict:
+	for key in Sarsa.train_value_dict:
 		with open(f'{key}.txt', 'w') as file:
-			for item in Sarsa.value_dict.get(key):
+			for item in Sarsa.train_value_dict.get(key):
 				file.write(str(item) + '\n')
 
 	print("Finish saving model and values dictionary!")
@@ -274,14 +274,84 @@ def validate():
 	if Sarsa.Q is None:
 		# read in the saved model 
 		Sarsa.Q = joblib.load('sarsa_crypto.joblib')
+		print("Loaded in Sarsa model!")
 	
 	if Sarsa.test_data is None: 
 		Sarsa.test_data = pd.read_csv("test_data.csv")
+		print("Loaded in test data!")
 
 	df_preprocessed_test = preprocess(Sarsa.test_data)
 
+	environments_list = []
+	total_rewards_list = []
+	rewards_list = []
+	steps_list = []
 
-def main(verbose=True, isTraining=True):
+	for episode in range(Sarsa.num_test_episodes):
+
+		total_rewards = 0
+		steps = []
+		environments = []
+		rewards = []
+
+		# hard assign the starting holding state, can determine by ourselves to start with holding or not holding
+		# currently set to not holding as dont want to hold overnight while sleeping and not monitoring 
+		holding_state = 0
+
+		# 28/07/2023: currently the validation will always start from 1/0 + (0,0,0), which mean always starting from a new day new time
+		# in the future can add in the enhanced version where it start from where the train data last 
+		# Note: the reward table here is the validation reward table 
+		current_state = (holding_state,0,0,0)
+		action = np.argmax(Sarsa.Q[current_state])
+		rewards_value = Sarsa.reward_table[current_state][action]
+
+		steps.append(action)
+		rewards.append(rewards_value)
+		environments.append(current_state)
+
+		# dummy initialization for next state
+		next_state = current_state
+
+		for month in range(0, Sarsa.reward_table.shape[1]):
+			for day in range(0, Sarsa.reward_table.shape[2]):
+				for time in range(0, Sarsa.reward_table.shape[3]):
+					if current_state[1:] == (0,0,0):
+						next_state = list(next_state)
+						next_state[3] = 1
+						next_state = tuple(next_state) # add 1 to time state if starting from (1,0,0,0) or (0,0,0,0)
+					else:
+						next_state = tuple([next_state[0], month, day, time])
+				
+					# second layer modification on state based on the current action
+					if action == 0: # buy, next state become holding state
+						next_state = (1,) + (month, day, time)
+					elif action == 1: # sell, next state become not holding state 
+						next_state = (0,) + (month, day, time)
+					else:  # if no action, then stick to the current holding state
+						# print("No action")
+						pass
+
+					next_action = np.argmax(Sarsa.Q[next_state])
+
+					current_state = next_state
+					action = next_action
+					rewards_value = Sarsa.reward_table[current_state][action]
+
+					steps.append(action)
+					rewards.append(rewards_value)
+					environments.append(current_state)
+
+		total_rewards += sum(rewards)
+		Sarsa.test_value_dict['environments'] = environments_list 
+		Sarsa.test_value_dict['total_rewards'] = total_rewards_list
+		Sarsa.test_value_dict['rewards'] = rewards_list
+		Sarsa.test_value_dict['steps'] = steps_list
+
+	average_rewards = total_rewards / Sarsa.num_test_episodes
+	print(f"Average reward on test data: {average_rewards}") 
+
+
+def main(isTraining=True, verbose=True):
 	SARSA = sarsa.SARSA()
 	engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{Constantor.DATABASE_NAME}')
 
@@ -292,7 +362,7 @@ def main(verbose=True, isTraining=True):
 	if isTraining:
 		train_test_split(df)
 		df_preprocessed_train = preprocess(Sarsa.train_data)
-		train(df_preprocessed_train)
+		train(df_preprocessed_train, verbose=verbose)
 		save_model()
 
 	validate()
@@ -300,6 +370,6 @@ def main(verbose=True, isTraining=True):
 
 if __name__ == '__main__':
 	print("Start training process")
-	main()
+	main(isTraining=True, verbose=True)
 
 

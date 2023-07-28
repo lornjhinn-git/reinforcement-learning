@@ -8,14 +8,21 @@ class ParentSARSA:
         self.discount_factor: Optional[float] = 0.1
         self.epsilon: Optional[float] = 0.1
         self.gamma: Optional[float] = 0.9
-        self.num_episodes: Optional[int] = 1
+        self.num_train_episodes: Optional[int] = 1000000
+        self.num_test_episodes: Optional[int] = 10
         self.data: Optional[pd.Dataframe] = None
         self.Q: Optional[np.array] = None
         self.reward_table: Optional[np.array] = None
         self.isHolding = False
         self.train_data: Optional[pd.Dataframe] = None
         self.test_data: Optional[pd.Dataframe] = None
-        self.value_dict = {
+        self.train_value_dict = {
+                'environments': None,
+                'total_rewards': None,
+                'rewards': None, 
+                'steps': None
+	    }
+        self.test_value_dict = {
                 'environments': None,
                 'total_rewards': None,
                 'rewards': None, 

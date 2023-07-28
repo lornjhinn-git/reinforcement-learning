@@ -5,7 +5,7 @@ from datetime import date
 from sklearn.preprocessing import LabelEncoder 
 
 # features that need to be scaled
-print("OK")
+# print("OK")
 
 # 1. month (jan - dec)
 # 2. day (mon - sat)
