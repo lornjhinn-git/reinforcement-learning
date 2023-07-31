@@ -8,8 +8,8 @@ class ParentSARSA:
         self.discount_factor: Optional[float] = 0.1
         self.epsilon: Optional[float] = 0.1
         self.gamma: Optional[float] = 0.9
-        self.num_train_episodes: Optional[int] = 1000000
-        self.num_test_episodes: Optional[int] = 10
+        self.num_train_episodes: Optional[int] = 5
+        self.num_test_episodes: Optional[int] = 1
         self.data: Optional[pd.Dataframe] = None
         self.Q: Optional[np.array] = None
         self.reward_table: Optional[np.array] = None

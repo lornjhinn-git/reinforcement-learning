@@ -17,11 +17,20 @@ Sarsa = sarsa.SARSA()
 def train_test_split(df):
     global Sarsa
     Sarsa.train_data = df[:math.floor(df.shape[0]*Constantor.TRAIN_SPLIT)]
-    Sarsa.test_data = df[Sarsa.train_data.shape[0]:]
+    Sarsa.test_data = df[math.floor(df.shape[0]*Constantor.TRAIN_SPLIT):]
+    ##############
+	# train data #
+	##############
     Sarsa.train_data.to_csv("train_data.csv")
     Sarsa.train_data.to_csv(f"train_data_{Utilator.get_formatted_date()}.csv")
-    Sarsa.train_data.to_csv("test_data.csv")
-    Sarsa.train_data.to_csv(f"test_data_{Utilator.get_formatted_date()}.csv")
+    ##############
+	# test data  #
+	##############
+    Sarsa.test_data.to_csv("test_data.csv")
+    Sarsa.test_data.to_csv(f"test_data_{Utilator.get_formatted_date()}.csv")
+    print(f"Total sample size: {df.shape}")
+    print(f"Sarsa train data sample size: {Sarsa.train_data.shape}")
+    print(f"Sarsa test data sample size: {Sarsa.test_data.shape}")
 
 
 def policy(state, verbose = False) -> tuple[int, float]: 
@@ -370,6 +379,6 @@ def main(isTraining=True, verbose=True):
 
 if __name__ == '__main__':
 	print("Start training process")
-	main(isTraining=True, verbose=True)
+	main(isTraining=True, verbose=False)
 
 
