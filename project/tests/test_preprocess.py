@@ -79,3 +79,11 @@ def test_pareto_distribution_bins():
         print(f"Error message: {e}") 
 
 
+def test_convert_str_to_datetime():
+    input_str = '2023-07-19 15:30:00'
+    converted_value = Preprocessor.convert_str_to_datetime(input_str)
+    print(f"Original input: {input_str}")
+    print(f"Converted value: {converted_value}")
+    print(f"Type of converted value: {type(converted_value)}")
+
+

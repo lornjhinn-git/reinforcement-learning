@@ -91,6 +91,10 @@ def update_q_value(state:tuple, action:int, rewards:list, rewards_value:float, n
 
 
 def preprocess(df, verbose=True) -> pd.DataFrame:
+
+	# convert str format datetime value to datetime format
+	df['datetime'] = df['datetime'].apply(lambda x: Preprocessor.convert_str_to_datetime(x))
+
 	df_preprocessed = df.pipe(Preprocessor.get_day_of_week)\
 						.pipe(Preprocessor.set_action)\
 						.pipe(Preprocessor.pareto_distribution_bins)\
@@ -250,6 +254,10 @@ def train(data: np.array, verbose=True) -> tuple[np.array, dict]:
 						print("Next state:", next_state)
 						print("Next action:", next_action)
 
+					steps.append(action)
+					rewards.append(rewards_value)
+					environments.append(current_state)
+
 					current_state = next_state
 					action = next_action 
 					action_value = next_action_value
@@ -280,6 +288,17 @@ def save_model():
 
 
 def validate():
+
+	# dataframe placeholder to store every iteration step, move, state for analysis
+	df_validate_result = pd.DataFrame(
+							columns=[
+								'environments',
+								'total_rewards',
+								'rewards',
+								'steps'
+							]
+						)	
+
 	if Sarsa.Q is None:
 		# read in the saved model 
 		Sarsa.Q = joblib.load('sarsa_crypto.joblib')
@@ -340,7 +359,19 @@ def validate():
 						# print("No action")
 						pass
 
-					next_action = np.argmax(Sarsa.Q[next_state])
+					if next_state[0] == 1: # if in holding state, then only can sell or no action
+						allowed_next_actions = ['sell', 'no_action']
+					else:
+						allowed_next_actions = ['buy', 'no_action']
+
+					allowed_next_action_indices = [Constantor.ACTION_DICT[action] for action in allowed_next_actions]
+					allowed_next_action_q_values = Sarsa.Q[next_state][allowed_next_action_indices]
+
+					print("Allowed next action q values:", allowed_next_action_q_values)
+
+					next_action = np.argmax([allowed_next_action_q_values])
+
+					print("Next action:", next_action)
 
 					current_state = next_state
 					action = next_action
@@ -350,13 +381,34 @@ def validate():
 					rewards.append(rewards_value)
 					environments.append(current_state)
 
-		total_rewards += sum(rewards)
-		Sarsa.test_value_dict['environments'] = environments_list 
-		Sarsa.test_value_dict['total_rewards'] = total_rewards_list
-		Sarsa.test_value_dict['rewards'] = rewards_list
-		Sarsa.test_value_dict['steps'] = steps_list
+			total_rewards += sum(rewards)
+			Sarsa.test_value_dict['environments'] = environments
+			Sarsa.test_value_dict['total_rewards'] = total_rewards
+			Sarsa.test_value_dict['rewards'] = rewards
+			Sarsa.test_value_dict['steps'] = steps
+
+			# df_validate_result = df_validate_result.append(
+			# 							{
+			# 								'Iteration': episode, 
+			# 								'environments': environments_list,
+			# 								'total_rewards': total_rewards_list,
+			# 								'rewards': rewards_list,
+			# 								'steps': steps_list
+			# 							}
+			# 					 )
+
+		# df_validate_result.loc[episode, 'iterations'] = episode
+		# df_validate_result.loc[episode, 'environments'] = environments
+		# df_validate_result.loc[episode, 'total_rewards'] = total_rewards
+		# df_validate_result.loc[episode, 'rewards'] = rewards
+		# df_validate_result.loc[episode, 'steps'] = steps
+
+
+
+		df_validate_result.loc[len(df_validate_result)] = Sarsa.test_value_dict
 
 	average_rewards = total_rewards / Sarsa.num_test_episodes
+	df_validate_result.to_csv(f'./validation/result_{Utilator.get_formatted_date()}.csv')
 	print(f"Average reward on test data: {average_rewards}") 
 
 
@@ -379,6 +431,6 @@ def main(isTraining=True, verbose=True):
 
 if __name__ == '__main__':
 	print("Start training process")
-	main(isTraining=True, verbose=False)
+	main(isTraining=False, verbose=False)
 
 

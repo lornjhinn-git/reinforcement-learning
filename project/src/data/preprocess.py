@@ -1,7 +1,7 @@
 # Import general package 
 from ..sarsa import *
 from ..constants import constants as Constantor
-from datetime import date 
+from datetime import date, datetime
 from sklearn.preprocessing import LabelEncoder 
 
 # features that need to be scaled
@@ -20,6 +20,16 @@ def get_day_of_week(df) -> pd.DataFrame:
     df['local_numeric_day'] =  df['datetime'].apply(lambda x: (x.weekday()) % 7 + 1)
     df['local_day'] =  df['local_numeric_day'].apply(lambda x: days[x-1])
     return df 
+
+
+def convert_str_to_datetime(input_value):
+    if isinstance(input_value, str):
+        try:
+            datetime_value = datetime.strptime(input_value, '%Y-%m-%d %H:%M:%S')  # Change format if needed
+            return datetime_value
+        except ValueError:
+            pass
+    return input_value
 
 
 def set_action(df, optimum_sell_rewards=15, optimum_buy_rewards=15) -> pd.DataFrame:
