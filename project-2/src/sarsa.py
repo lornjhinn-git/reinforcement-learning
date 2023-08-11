@@ -10,36 +10,78 @@ import joblib
 
 
 class SARSA:
-    def __init__(self):
-        self.learning_rate: Optional[float] = 0.005
-        self.discount_factor: Optional[float] = 0.1
-        self.epsilon: Optional[float] = 0.1
-        self.gamma: Optional[float] = 0.9
-        self.num_train_episodes: Optional[int] = 10
-        self.num_test_episodes: Optional[int] = 1
-        self.data: Optional[pd.Dataframe] = None
-        self.Q: Optional[np.array] = None
-        self.reward_table: Optional[np.array] = None
-        self.budget: float = 2000 # set at 2k usd as starting budget
-        self.price_table: np.arary = None
-        self.purchase_unit: int = 0
-        self.total_purchase_prices: float = 0
-        self.purchase_states: list[tuple] = None
-        self.isHolding = False
-        self.train_data: Optional[pd.Dataframe] = None
-        self.test_data: Optional[pd.Dataframe] = None
-        self.train_value_dict = {
+    def __init__(
+            self, 
+            learning_rate=0.005,
+            discount_factor=0.1,
+            epsilon=0.1,
+            gamma=0.9,
+            num_train_episodes=100,
+            num_test_episodes=1,
+            data=None,
+            Q=None,
+            reward_table=None,
+            budget=2000,
+            price_table=None,
+            purchase_unit=0,
+            total_purchase_prices=0,
+            purchase_states=[],
+            train_data=None,
+            test_data=None,
+            train_value_dict = {
+                            'environments': None,
+                            'total_rewards': None,
+                            'rewards': None, 
+                            'steps': None
+            },
+            test_value_dict = {
                 'environments': None,
                 'total_rewards': None,
                 'rewards': None, 
                 'steps': None
-	    }
-        self.test_value_dict = {
-                'environments': None,
-                'total_rewards': None,
-                'rewards': None, 
-                'steps': None
-	    }
+	        }
+    ):
+        # self.learning_rate: Optional[float] = 0.005
+        # self.discount_factor: Optional[float] = 0.1
+        # self.epsilon: Optional[float] = 0.1
+        # self.gamma: Optional[float] = 0.9
+        # self.num_train_episodes: Optional[int] = 100
+        # self.num_test_episodes: Optional[int] = 1
+        # self.data: Optional[pd.Dataframe] = None
+        # self.Q: Optional[np.array] = None
+        # self.reward_table: Optional[np.array] = None
+        # self.budget: float = 2000 # set at 2k usd as starting budget
+        # self.price_table: np.arary = None
+        # self.purchase_unit: int = 0
+        # self.total_purchase_prices: float = 0
+        # self.purchase_states: list[tuple] = None
+        # self.isHolding = False
+        # self.train_data: Optional[pd.Dataframe] = None
+        # self.test_data: Optional[pd.Dataframe] = None
+        self.learning_rate=learning_rate
+        self.discount_factor=discount_factor
+        self.epsilon=epsilon
+        self.gamma=gamma
+        self.num_train_episodes=num_train_episodes
+        self.num_test_episodes=num_test_episodes
+        self.data=data
+        self.Q=Q
+        self.reward_table=reward_table
+        self.budget=budget # set at 2k usd as starting budget
+        self.price_table=price_table
+        self.purchase_unit=purchase_unit
+        self.total_purchase_prices=total_purchase_prices
+        self.purchase_states=purchase_states
+        self.train_data=train_data
+        self.test_data=test_data
+        self.train_value_dict=train_value_dict
+        self.test_value_dict=test_value_dict
+
+class SARSA(SARSA):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        print("Child sarsa initialized")
+        print(self.__dict__)
 
 
     def policy(self, state) -> tuple[int, float]: 
@@ -59,6 +101,7 @@ class SARSA:
         if (
             # selling profit > average purchase price + trading fees
             action == 1 and 
+            self.purchase_unit > 0 and 
             self.price_table[state] > ((self.total_purchase_prices/len(self.purchase_unit)) + (self.price_table[state]*0.002))
         ): # making profit
             rewards_value = 1
@@ -66,23 +109,31 @@ class SARSA:
             (
                 # selling profit <= average purchase price + trading fees
                 action == 1 and 
+                self.purchase_unit > 0 and 
                 self.price_table[state] <= ((self.total_purchase_prices/len(self.purchase_unit)) + (self.price_table[state]*0.002))
             ) or 
             (
                 # total purchase more than budget 
+                action == 0 and 
+                self.purchase_unit > 0 and 
                 self.total_purchase_prices > self.budget
-            )
+            ) or 
+            (
+                # try to sell even no unit
+                action == 1 and 
+                self.purchase_unit == 0
+            ) 
         ): # losing money
             rewards_value = -1
-        else: # no action
+        else: # no actionW
             rewards_value = 0
 
         if action == 0: # buy 
             self.purchase_unit += 1
             self.total_purchase_prices += self.price_table[state]
-            self.budget -= (self.price_table[state] * (self.price_table[state]*0.002))
+            self.budget -= self.price_table[state]
         elif action == 1: # sell
-            self.budget = self.price_table[state]*0.998
+            self.budget = self.total_purchase_prices*0.998
             self.purchase_prices = 0
             self.purchase_unit = 0
 
@@ -205,7 +256,7 @@ class SARSA:
         df_preprocessed_test = Preprocessor.preprocessing(self.test_data)
 
         # create the new state table from df_preprocessed test
-        
+
 
         environments_list = []
         total_rewards_list = []

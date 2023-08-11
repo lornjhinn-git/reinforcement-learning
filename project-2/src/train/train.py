@@ -5,9 +5,20 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 import math
+import argparse
+import sys
 
-global Sarsa
-Sarsa = sarsa.SARSA()
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Parameters for SARSA")
+    
+    # Adding command line arguments
+    parser.add_argument("--num_train_episodes", type=int, help="Num of episodes to train")
+    # parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
+    
+    # Parse the arguments
+    return parser.parse_args()
+
 
 # Generate the sample data
 def train_test_split(df):
@@ -30,7 +41,6 @@ def train_test_split(df):
 
 
 def train():
-	SARSA = sarsa.SARSA()
 	engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{Constantor.DATABASE_NAME}')
 
 	df = pd.read_sql_query(f'select * from {Constantor.TABLE_NAME}',con=engine)\
@@ -46,7 +56,7 @@ def train():
 
 	Sarsa.train(df_preprocessed_train)
 	Sarsa.save_model()
-	Sarsa.validate()
+	#Sarsa.validate()
 
 	# df_preprocessed_train.to_csv("./validation/preprocessed_data.csv")
 	# df_reward_stats.to_csv("./validation/reward_stats_data.csv")
@@ -54,6 +64,13 @@ def train():
 
 if __name__ == '__main__':
 	print("Start training process")
-	train()
+	global Sarsa 
+	if sys.argv == 1:
+		Sarsa = sarsa.SARSA()
+		train()
+	else: 
+		args = parse_arguments()
+		Sarsa = sarsa.SARSA(**vars(args))
+		train()
 
 
