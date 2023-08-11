@@ -14,6 +14,11 @@ def parse_arguments():
     
     # Adding command line arguments
     parser.add_argument("--num_train_episodes", type=int, help="Num of episodes to train")
+    parser.add_argument("--num_test_episodes", type=int, help="Num of episodes to validate")
+    parser.add_argument("--learning_rate", type=float, help="Learning rate")
+    parser.add_argument("--gamma", type=float, help="Determine for quick or long term reward. Higher the longer")
+    parser.add_argument("--epsilon", type=float, help="Probability to explore")
+    parser.add_argument("--budget", type=int, help="Game budget to begin")
     # parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
     
     # Parse the arguments
@@ -65,12 +70,10 @@ def train():
 if __name__ == '__main__':
 	print("Start training process")
 	global Sarsa 
-	if sys.argv == 1:
+	if len(sys.argv) == 1:
 		Sarsa = sarsa.SARSA()
 		train()
 	else: 
 		args = parse_arguments()
 		Sarsa = sarsa.SARSA(**vars(args))
 		train()
-
-
