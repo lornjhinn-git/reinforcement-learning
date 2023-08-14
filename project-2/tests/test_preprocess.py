@@ -1,4 +1,4 @@
-from src.data import preprocess as Preprocessor
+from src.preprocessing import preprocessing as Preprocessor
 import pandas as pd 
 import numpy as np
 from datetime import datetime

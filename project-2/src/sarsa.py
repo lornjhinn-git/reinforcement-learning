@@ -38,7 +38,8 @@ class SARSA:
                 'total_rewards': None,
                 'rewards': None, 
                 'steps': None
-	        }
+	        },
+            keep_top_n_steps=None
     ):
         self.learning_rate=0.005 if learning_rate is None else learning_rate
         self.epsilon=0.1 if epsilon is None else epsilon
@@ -57,6 +58,12 @@ class SARSA:
         self.test_data=test_data
         self.train_value_dict=train_value_dict
         self.test_value_dict=test_value_dict
+        self.keep_top_n_steps=10 if keep_top_n_steps is None else keep_top_n_steps
+        self.df_steps=pd.DataFrame({f'Step_Top_{i+1}': [0]*288 for i in range(self.keep_top_n_steps)})
+        self.df_rewards=pd.DataFrame({f'Rewards_Top_{i+1}': [0]*288 for i in range(self.keep_top_n_steps)})
+        self.top_n_total_rewards = [0]*self.keep_top_n_steps
+
+
 
 class SARSA(SARSA):
     def __init__(self, **kwargs):
@@ -113,8 +120,8 @@ class SARSA(SARSA):
             self.purchase_unit += 1
             self.total_purchase_prices += self.price_table[state]
             self.budget -= self.price_table[state]
-        elif action == 1: # sell
-            self.budget = self.total_purchase_prices*0.998
+        elif action == 1 and self.purchase_unit > 0: # sell
+            self.budget = self.price_table[state]*0.998
             self.purchase_prices = 0
             self.purchase_unit = 0
 
@@ -131,7 +138,28 @@ class SARSA(SARSA):
         
         # Update the Q-value in the Q-table
         self.Q[state][Constantor.ACTION_DICT.get(action)] = new_q
-        
+    
+
+    # Update and keep the top n values 
+    def update_top_n_values(self, rewards:list[float], steps:list[int]):
+        for index, _ in enumerate(self.top_n_total_rewards, start=1):            
+            if sum(rewards) > self.top_n_total_rewards[-1]:
+                print("Replacing")
+                self.top_n_total_rewards.pop()
+                self.top_n_total_rewards.append(sum(rewards))
+                self.df_rewards.iloc[:, -1] = rewards
+                self.df_steps.iloc[:, -1] = steps       
+
+            self.top_n_total_rewards.sort(reverse=True)
+            sorted_indices = [
+                index for index, _ 
+                in sorted(enumerate(self.top_n_total_rewards), key=lambda x: x[1], reverse=True)
+            ]
+
+            # re-sort df_steps, df_rewards based on the sorted_indices 
+            self.df_steps = self.df_steps.iloc[:, sorted_indices]
+            self.df_rewards = self.df_rewards.iloc[:, sorted_indices]
+
 
     def train(self, data: np.array, verbose=True) -> tuple[np.array, dict]:
         environments_list = []
@@ -189,27 +217,30 @@ class SARSA(SARSA):
                         rewards.append(rewards_value)
                         environments.append(current_state)
 
-            total_rewards_list.append(sum(rewards))
-            rewards_list.append(rewards)
-            steps_list.append(steps)
-            environments_list.append(environments)
+
+
+
+            # total_rewards_list.append(sum(rewards))
+            # rewards_list.append(rewards)
+            # steps_list.append(steps)
+            # environments_list.append(environments)
         
-        self.train_value_dict['environments'] = environments_list 
-        self.train_value_dict['total_rewards'] = total_rewards_list
-        self.train_value_dict['rewards'] = rewards_list
-        self.train_value_dict['steps'] = steps_list
+        # self.train_value_dict['environments'] = environments_list 
+        # self.train_value_dict['total_rewards'] = total_rewards_list
+        # self.train_value_dict['rewards'] = rewards_list
+        # self.train_value_dict['steps'] = steps_list
 
         print("Finish training. All values are stored in self!")
 
 
     def save_model(self):	
-        joblib.dump(self.Q, f'self_crypto.joblib')
-        joblib.dump(self.Q, f'self_crypto_{Utilator.get_formatted_date()}.joblib')
+        joblib.dump(self.Q, f'sarsa_crypto.joblib')
+        joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
 
-        for key in self.train_value_dict:
-            with open(f'{key}.txt', 'w') as file:
-                for item in self.train_value_dict.get(key):
-                    file.write(str(item) + '\n')
+        # for key in self.train_value_dict:
+        #     with open(f'{key}.txt', 'w') as file:
+        #         for item in self.train_value_dict.get(key):
+        #             file.write(str(item) + '\n')
 
         print("Finish saving model and values dictionary!")
 
