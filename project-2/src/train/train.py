@@ -61,6 +61,7 @@ def train():
 
 	Sarsa.train(df_preprocessed_train)
 	Sarsa.save_model()
+	Sarsa.save_best_n_result()
 	#Sarsa.validate()
 
 	# df_preprocessed_train.to_csv("./validation/preprocessed_data.csv")

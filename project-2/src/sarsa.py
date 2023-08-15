@@ -58,9 +58,10 @@ class SARSA:
         self.test_data=test_data
         self.train_value_dict=train_value_dict
         self.test_value_dict=test_value_dict
-        self.keep_top_n_steps=10 if keep_top_n_steps is None else keep_top_n_steps
-        self.df_steps=pd.DataFrame({f'Step_Top_{i+1}': [0]*288 for i in range(self.keep_top_n_steps)})
-        self.df_rewards=pd.DataFrame({f'Rewards_Top_{i+1}': [0]*288 for i in range(self.keep_top_n_steps)})
+        self.keep_top_n_steps=100 if keep_top_n_steps is None else keep_top_n_steps
+        self.last_state_dimension=288
+        self.df_steps=pd.DataFrame({f'Step_Top_{i+1}': [0]*self.last_state_dimension for i in range(self.keep_top_n_steps)})
+        self.df_rewards=pd.DataFrame({f'Rewards_Top_{i+1}': [0]*self.last_state_dimension for i in range(self.keep_top_n_steps)})
         self.top_n_total_rewards = [0]*self.keep_top_n_steps
 
 
@@ -142,23 +143,36 @@ class SARSA(SARSA):
 
     # Update and keep the top n values 
     def update_top_n_values(self, rewards:list[float], steps:list[int]):
-        for index, _ in enumerate(self.top_n_total_rewards, start=1):            
+        for index, _ in enumerate(self.top_n_total_rewards):            
             if sum(rewards) > self.top_n_total_rewards[-1]:
-                print("Replacing")
                 self.top_n_total_rewards.pop()
                 self.top_n_total_rewards.append(sum(rewards))
                 self.df_rewards.iloc[:, -1] = rewards
-                self.df_steps.iloc[:, -1] = steps       
+                self.df_steps.iloc[:, -1] = steps
 
-            self.top_n_total_rewards.sort(reverse=True)
             sorted_indices = [
                 index for index, _ 
                 in sorted(enumerate(self.top_n_total_rewards), key=lambda x: x[1], reverse=True)
             ]
 
-            # re-sort df_steps, df_rewards based on the sorted_indices 
-            self.df_steps = self.df_steps.iloc[:, sorted_indices]
-            self.df_rewards = self.df_rewards.iloc[:, sorted_indices]
+            # re-sort the column based on sorted_indices
+            current_rewards_columns = self.df_rewards.columns
+            current_steps_columns = self.df_steps.columns
+            sorted_rewards_columns = [
+                current_rewards_columns[index] for index in sorted_indices
+            ]
+            sorted_steps_columns = [
+                current_steps_columns[index] for index in sorted_indices
+            ]
+
+            self.df_rewards = self.df_rewards[sorted_rewards_columns]
+            self.df_steps = self.df_steps[sorted_steps_columns]
+            self.top_n_total_rewards = [self.top_n_total_rewards[index] for index in sorted_indices]
+
+            # keep for future verbose wrapper logging
+            # print("\nCurrent columns:", current_rewards_columns)
+            # print("sorted columns:", sorted_rewards_columns)
+            # print("Sorted df_rewards:", self.df_rewards.head(3))
 
 
     def train(self, data: np.array, verbose=True) -> tuple[np.array, dict]:
@@ -217,8 +231,13 @@ class SARSA(SARSA):
                         rewards.append(rewards_value)
                         environments.append(current_state)
 
-
-
+            # update to keep top n best action that give best rewards
+            self.update_top_n_values(rewards=rewards, steps=steps)
+    
+            if episode % 500000 == 0 and episode > 0:
+                print("Backing up training model")
+                self.save_model(episodes=episode)
+                self.save_best_n_result(episode=episode)
 
             # total_rewards_list.append(sum(rewards))
             # rewards_list.append(rewards)
@@ -233,16 +252,24 @@ class SARSA(SARSA):
         print("Finish training. All values are stored in self!")
 
 
-    def save_model(self):	
-        joblib.dump(self.Q, f'sarsa_crypto.joblib')
-        joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
-
-        # for key in self.train_value_dict:
-        #     with open(f'{key}.txt', 'w') as file:
-        #         for item in self.train_value_dict.get(key):
-        #             file.write(str(item) + '\n')
+    def save_model(self, episodes=None):	
+        if episodes is None:
+            joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
+            joblib.dump(self.Q, f'sarsa_crypto.joblib')
+        else:
+            joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}_{episodes}.joblib')
 
         print("Finish saving model and values dictionary!")
+
+
+    def save_best_n_result(self, episodes=None):
+        if episodes is None:
+            self.df_rewards.to_csv(f"top_{self.keep_top_n_steps}_rewards.csv")
+            self.df_steps.to_csv(f"top_{self.keep_top_n_steps}_steps.csv")
+        else: 
+            self.df_rewards.to_csv(f"top_{self.keep_top_n_steps}_{episodes}_rewards.csv")
+            self.df_steps.to_csv(f"top_{self.keep_top_n_steps}_{episodes}_steps.csv")        
+        print(f"Finish saving top {self.keep_top_n_steps} results as csv!")
 
 
     def validate(self):
