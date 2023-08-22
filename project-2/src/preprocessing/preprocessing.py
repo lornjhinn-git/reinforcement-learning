@@ -1,6 +1,8 @@
 # Import general package 
 from ..sarsa import *
-from ..constants import constants as Constantor
+from ..config import constants as Constantor
+from ..config.logger import verbose_logger
+
 from datetime import date, datetime
 import pandas as pd
 import numpy as np
@@ -20,6 +22,7 @@ warnings.filterwarnings("ignore")
 # 2. day (mon - sat)
 # 3. time (12 am - 12 pm every 5 min)
 # 4. actions (buy, sell, no action)
+
 
 def get_day_of_week(df) -> pd.DataFrame:
     """
@@ -248,7 +251,7 @@ def create_reward_table(df_reward_stats, verbose=False) -> tuple[np.array, np.ar
     state_array_shape = tuple(state_unique_counts[:Constantor.NUM_ACTION])
     # add 3 unique actions 
     state_array_shape += (Constantor.NUM_ACTION ,)
-    print("State array shape:", state_array_shape)
+    # print("State array shape:", state_array_shape)
 
     # create the array with the initialized shape size 
     state_array = np.zeros(state_array_shape)
@@ -273,7 +276,7 @@ def create_reward_table(df_reward_stats, verbose=False) -> tuple[np.array, np.ar
 
     return reward_table, Q
 
-
+@verbose_logger
 def preprocessing(df) -> pd.DataFrame:
 
 	# convert str format datetime value to datetime format

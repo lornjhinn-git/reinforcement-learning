@@ -1,5 +1,6 @@
 from .. import sarsa
-from ..constants import constants as Constantor
+from ..config import constants as Constantor
+from ..config.logger import verbose_logger
 from ..preprocessing import preprocessing as Preprocessor, utils as Utilator
 import pandas as pd 
 import numpy as np
@@ -19,12 +20,13 @@ def parse_arguments():
     parser.add_argument("--gamma", type=float, help="Determine for quick or long term reward. Higher the longer")
     parser.add_argument("--epsilon", type=float, help="Probability to explore")
     parser.add_argument("--budget", type=int, help="Game budget to begin")
-    # parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose mode")
     
     # Parse the arguments
     return parser.parse_args()
 
 
+@verbose_logger
 # Generate the sample data
 def train_test_split(df):
     global Sarsa
@@ -33,18 +35,19 @@ def train_test_split(df):
     ##############
 	# train data #
 	##############
-    Sarsa.train_data.to_csv("train_data.csv")
-    Sarsa.train_data.to_csv(f"train_data_{Utilator.get_formatted_date()}.csv")
+    Sarsa.train_data.to_csv("./validation/data/train_data.csv")
+    Sarsa.train_data.to_csv(f"./validation/data/train_data_{Utilator.get_formatted_date()}.csv")
     ##############
 	# test data  #
 	##############
-    Sarsa.test_data.to_csv("test_data.csv")
-    Sarsa.test_data.to_csv(f"test_data_{Utilator.get_formatted_date()}.csv")
-    print(f"Total sample size: {df.shape}")
-    print(f"Sarsa train data sample size: {Sarsa.train_data.shape}")
-    print(f"Sarsa test data sample size: {Sarsa.test_data.shape}")
+    Sarsa.test_data.to_csv("./validation/data/test_data.csv")
+    Sarsa.test_data.to_csv(f"./validation/data/test_data_{Utilator.get_formatted_date()}.csv")
+    # print(f"Total sample size: {df.shape}")
+    # print(f"Sarsa train data sample size: {Sarsa.train_data.shape}")
+    # print(f"Sarsa test data sample size: {Sarsa.test_data.shape}")
 
 
+@verbose_logger
 def train():
 	engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{Constantor.DATABASE_NAME}')
 
@@ -57,7 +60,7 @@ def train():
 	_, Sarsa.Q = Preprocessor.create_reward_table(df_reward_stats)
 	Sarsa.price_table = Preprocessor.create_price_table(df_preprocessed_train, Sarsa.Q)
 
-	print("Sarsa.Q:", Sarsa.Q.shape)
+	# print("Sarsa.Q:", Sarsa.Q.shape)
 
 	Sarsa.train(df_preprocessed_train)
 	Sarsa.save_model()
@@ -69,12 +72,13 @@ def train():
 
 
 if __name__ == '__main__':
-	print("Start training process")
 	global Sarsa 
 	if len(sys.argv) == 1:
 		Sarsa = sarsa.SARSA()
 		train()
 	else: 
 		args = parse_arguments()
-		Sarsa = sarsa.SARSA(**vars(args))
+		filtered_args = vars(args).copy()
+		#filtered_args.pop('verbose', None)
+		Sarsa = sarsa.SARSA(**filtered_args)
 		train()

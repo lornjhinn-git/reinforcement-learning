@@ -1,4 +1,5 @@
-from .constants import constants as Constantor
+from .config import constants as Constantor
+from .config.logger import class_verbose_logger
 from .preprocessing import utils as Utilator
 from .preprocessing import preprocessing as Preprocessor
 
@@ -7,6 +8,10 @@ import pandas as pd
 import numpy as np
 import random 
 import joblib
+import logging
+
+
+logger = Constantor.SARSA_LOGGER
 
 
 class SARSA:
@@ -15,12 +20,12 @@ class SARSA:
             learning_rate=0.005,
             epsilon=0.1,
             gamma=0.9,
-            num_train_episodes=100,
+            num_train_episodes=5,
             num_test_episodes=1,
             data=None,
             Q=None,
             reward_table=None,
-            budget=2000,
+            budget=5000,
             price_table=None,
             purchase_unit=0,
             total_purchase_prices=0,
@@ -39,7 +44,8 @@ class SARSA:
                 'rewards': None, 
                 'steps': None
 	        },
-            keep_top_n_steps=None
+            keep_top_n_steps=None,
+            verbose=None
     ):
         self.learning_rate=0.005 if learning_rate is None else learning_rate
         self.epsilon=0.1 if epsilon is None else epsilon
@@ -49,7 +55,7 @@ class SARSA:
         self.data=data
         self.Q=Q
         self.reward_table=reward_table
-        self.budget=2000 if budget is None else budget  # set at 2k usd as starting budget
+        self.budget=5000 if budget is None else budget  # set at 2k usd as starting budget
         self.price_table=price_table
         self.purchase_unit=0 if purchase_unit is None else purchase_unit
         self.total_purchase_prices=0 if total_purchase_prices is None else total_purchase_prices
@@ -60,38 +66,66 @@ class SARSA:
         self.test_value_dict=test_value_dict
         self.keep_top_n_steps=100 if keep_top_n_steps is None else keep_top_n_steps
         self.last_state_dimension=288
-        self.df_steps=pd.DataFrame({f'Step_Top_{i+1}': [0]*self.last_state_dimension for i in range(self.keep_top_n_steps)})
-        self.df_rewards=pd.DataFrame({f'Rewards_Top_{i+1}': [0]*self.last_state_dimension for i in range(self.keep_top_n_steps)})
+        self.total_state_dimension=(288*5*7)+1
+        self.df_steps=pd.DataFrame({f'Step_Top_{i+1}': [0]*self.total_state_dimension for i in range(self.keep_top_n_steps)})
+        self.df_rewards=pd.DataFrame({f'Rewards_Top_{i+1}': [0]*self.total_state_dimension for i in range(self.keep_top_n_steps)})
+        self.df_worst_steps = pd.DataFrame({f'Step_Worst_{i+1}': [0]*self.total_state_dimension for i in range(self.keep_top_n_steps)})
+        self.df_worst_rewards = pd.DataFrame({f'Rewards_Worst_{i+1}': [0]*self.total_state_dimension for i in range(self.keep_top_n_steps)})
         self.top_n_total_rewards = [0]*self.keep_top_n_steps
-
+        self.worst_n_total_rewards = [0]*self.keep_top_n_steps
+        self.verbose = False if verbose is None else verbose
 
 
 class SARSA(SARSA):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print("Child sarsa initialized")
-        print(self.__dict__)
+        logger.info("Child sarsa initialized")
+
+        if self.verbose:
+            logger.debug("Class initialized attributes:", self.__dict__)
 
 
+    @class_verbose_logger
     def policy(self, state) -> tuple[int, float]: 
         r_var = random.random()
-        if r_var < self.epsilon:
-            # print("random")
-            best_action = np.where(self.Q[state] == random.choice(self.Q[state]))[0][0]
+        explore = False
+        explore = r_var < self.epsilon
+        best_action = float('-inf')
+
+        # filter allowed actions based on budget
+        if self.purchase_unit > 0:
+            allowed_actions = [1,2] # sell or no action
+        elif self.purchase_unit == 0:
+            allowed_actions = [0,2] # buy or no action
+        else:
+            allowed_actions = [0,1,2]
+
+        if explore:
+            # best_action = np.where(self.Q[state] == random.choice(self.Q[state]))[0][0]
+            best_action = random.choice(allowed_actions)
             best_value = self.Q[state][best_action]
         else:
-            best_action = np.argmax(self.Q[state])
-            best_value = self.Q[state][best_action]
+            for action in allowed_actions:
+                if self.Q[state][action] > best_action:
+                    best_action = action
+                    best_value = self.Q[state][best_action]
+
+        if self.verbose:
+            logger.debug("Policying...")
+            logger.debug(f"Current budget: {self.budget}, Holding Unit: {self.purchase_unit}, Total Purchase Price: {self.total_purchase_prices}")
+            logger.debug(f"Random: {explore}, State: {state}, Action: {Constantor.INDEX_TO_ACTION.get(best_action)}, Action Value: {best_value}\n")
+            print("\n")
 
         return best_action, best_value
 
 
+    @class_verbose_logger
     def reward_function(self, state, action) -> float:
         if (
             # selling profit > average purchase price + trading fees
             action == 1 and 
             self.purchase_unit > 0 and 
-            self.price_table[state] > ((self.total_purchase_prices/len(self.purchase_unit)) + (self.price_table[state]*0.002))
+            self.price_table[state] > ((self.total_purchase_prices/self.purchase_unit) + (self.price_table[state]*0.002))
         ): # making profit
             rewards_value = 1
         elif (
@@ -99,22 +133,23 @@ class SARSA(SARSA):
                 # selling profit <= average purchase price + trading fees
                 action == 1 and 
                 self.purchase_unit > 0 and 
-                self.price_table[state] <= ((self.total_purchase_prices/len(self.purchase_unit)) + (self.price_table[state]*0.002))
+                self.price_table[state] <= ((self.total_purchase_prices/self.purchase_unit) + (self.price_table[state]*0.002))
             ) or 
             (
                 # total purchase more than budget 
                 action == 0 and 
                 self.purchase_unit > 0 and 
                 self.total_purchase_prices > self.budget
-            ) or 
-            (
-                # try to sell even no unit
-                action == 1 and 
-                self.purchase_unit == 0
-            ) 
+            )
+            # ) or 
+            # (
+            #     # try to sell even no unit
+            #     action == 1 and 
+            #     self.purchase_unit == 0
+            # ) 
         ): # losing money
-            rewards_value = -1
-        else: # no actionW
+            rewards_value = -10
+        else: # no action
             rewards_value = 0
 
         if action == 0: # buy 
@@ -122,25 +157,33 @@ class SARSA(SARSA):
             self.total_purchase_prices += self.price_table[state]
             self.budget -= self.price_table[state]
         elif action == 1 and self.purchase_unit > 0: # sell
-            self.budget = self.price_table[state]*0.998
-            self.purchase_prices = 0
+            self.budget += self.price_table[state]*0.998
+            self.total_purchase_prices = 0
             self.purchase_unit = 0
 
         return rewards_value
 
 
+    @class_verbose_logger
     # Update Q-value for a state-action pair based on observed rewards and estimated future Q-values
     def update_q_value(self, state:tuple, action:int, rewards_value:float, next_state:tuple, next_action:int):
 
         # Compute the updated Q-value using the self update equation
-        current_q = self.Q[state][Constantor.ACTION_DICT.get(action)]
-        next_q = self.Q[next_state][Constantor.ACTION_DICT.get(next_action)]
+        current_q = self.Q[state][action]
+        next_q = self.Q[next_state][next_action]
         new_q = current_q + self.learning_rate * (rewards_value + self.gamma * next_q - current_q)
         
         # Update the Q-value in the Q-table
-        self.Q[state][Constantor.ACTION_DICT.get(action)] = new_q
+        self.Q[state][action] = new_q
+
+        if self.verbose:
+            logger.debug("Updating...")
+            logger.debug(f"Current Q: {current_q}, Rewards: {rewards_value}, Next Q: {next_q}, Updated current Q: {new_q}")
+            logger.debug(f"Current state overall Q: {self.Q[state]}")
+            print("\n")
     
 
+    @class_verbose_logger
     # Update and keep the top n values 
     def update_top_n_values(self, rewards:list[float], steps:list[int]):
         for index, _ in enumerate(self.top_n_total_rewards):            
@@ -175,15 +218,53 @@ class SARSA(SARSA):
             # print("Sorted df_rewards:", self.df_rewards.head(3))
 
 
+    @class_verbose_logger
+    # Update and keep the top n values 
+    def update_worst_n_values(self, rewards:list[float], steps:list[int]):
+        for index, _ in enumerate(self.worst_n_total_rewards):            
+            if sum(rewards) < self.worst_n_total_rewards[-1]:
+                self.worst_n_total_rewards.pop()
+                self.worst_n_total_rewards.append(sum(rewards))
+                self.df_worst_rewards.iloc[:, -1] = rewards
+                self.df_worst_steps.iloc[:, -1] = steps
+
+            sorted_indices = [
+                index for index, _ 
+                in sorted(enumerate(self.worst_n_total_rewards), key=lambda x: x[1])
+            ]
+
+            # re-sort the column based on sorted_indices
+            current_rewards_columns = self.df_worst_rewards.columns
+            current_steps_columns = self.df_worst_steps.columns
+            sorted_rewards_columns = [
+                current_rewards_columns[index] for index in sorted_indices
+            ]
+            sorted_steps_columns = [
+                current_steps_columns[index] for index in sorted_indices
+            ]
+
+            self.df_worst_rewards = self.df_worst_rewards[sorted_rewards_columns]
+            self.df_worst_steps = self.df_worst_steps[sorted_steps_columns]
+            self.worst_n_total_rewards = [self.worst_n_total_rewards[index] for index in sorted_indices]
+
+            # keep for future verbose wrapper logging
+            # print("\nCurrent columns:", current_rewards_columns)
+            # print("sorted columns:", sorted_rewards_columns)
+            # print("Sorted df_rewards:", self.df_worst_rewards.head(3))
+
+
+    @class_verbose_logger
     def train(self, data: np.array, verbose=True) -> tuple[np.array, dict]:
         environments_list = []
         total_rewards_list = []
         rewards_list = []
         steps_list = []
 
+        # print("Begin training")
+
         for episode in range(self.num_train_episodes):
 
-            print("\nEpisode:", episode)
+            # print("\nEpisode:", episode)
 
             # initialize cumulative rewards
             total_rewards = 0
@@ -220,24 +301,37 @@ class SARSA(SARSA):
                             next_state = tuple([month, day, time])
                             #print("In next state:", next_state)
 
-                        next_action, q_value = self.policy(next_state)
+                        action, _ = self.policy(current_state)
+                        rewards_value = self.reward_function(current_state, action)
+                        next_action, _ = self.policy(next_state)
 
                         self.update_q_value(current_state, action, rewards_value, next_state, next_action)
 
-                        current_state = next_state
-                        action = next_action 
-                        
                         steps.append(action)
                         rewards.append(rewards_value)
                         environments.append(current_state)
 
+                        current_state = next_state
+                        action = next_action 
+
+
+            # print(f"Episode {episode}:", len(rewards))
             # update to keep top n best action that give best rewards
             self.update_top_n_values(rewards=rewards, steps=steps)
+
+            # update the worst n action to ensure it is really trying different actions 
+            self.update_worst_n_values(rewards=rewards, steps=steps)
+
+            # print(self.df_worst_rewards.head())
+            # print(self.df_worst_steps.head())
     
-            if episode % 500000 == 0 and episode > 0:
+            if episode % 1000 == 0 and episode > 0:
                 print("Backing up training model")
                 self.save_model(episodes=episode)
-                self.save_best_n_result(episode=episode)
+                self.save_best_n_result(episodes=episode)
+
+            if episode % 1000 == 0 and episode > 0:
+                print(f"Done {episode} episodes")
 
             # total_rewards_list.append(sum(rewards))
             # rewards_list.append(rewards)
@@ -249,29 +343,36 @@ class SARSA(SARSA):
         # self.train_value_dict['rewards'] = rewards_list
         # self.train_value_dict['steps'] = steps_list
 
-        print("Finish training. All values are stored in self!")
+        #print("Finish training. All values are stored!")
 
 
+    @class_verbose_logger
     def save_model(self, episodes=None):	
         if episodes is None:
-            joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
-            joblib.dump(self.Q, f'sarsa_crypto.joblib')
+            joblib.dump(self.Q, f'./validation/model/sarsa_crypto_{Utilator.get_formatted_date()}.joblib')
+            joblib.dump(self.Q, f'./validation/model/sarsa_crypto.joblib')
         else:
-            joblib.dump(self.Q, f'sarsa_crypto_{Utilator.get_formatted_date()}_{episodes}.joblib')
+            joblib.dump(self.Q, f'./validation/model/sarsa_crypto_backup.joblib')
 
-        print("Finish saving model and values dictionary!")
+        #print("Finish saving model and values dictionary!")
 
 
+    @class_verbose_logger
     def save_best_n_result(self, episodes=None):
         if episodes is None:
-            self.df_rewards.to_csv(f"top_{self.keep_top_n_steps}_rewards.csv")
-            self.df_steps.to_csv(f"top_{self.keep_top_n_steps}_steps.csv")
+            self.df_rewards.to_csv(f"./validation/result/top_{self.keep_top_n_steps}_rewards.csv")
+            self.df_steps.to_csv(f"./validation/result/top_{self.keep_top_n_steps}_steps.csv")
+            self.df_worst_rewards.to_csv(f"./validation/result/worst_{self.keep_top_n_steps}_rewards.csv")
+            self.df_worst_steps.to_csv(f"./validation/result/worst_{self.keep_top_n_steps}_steps.csv")
         else: 
-            self.df_rewards.to_csv(f"top_{self.keep_top_n_steps}_{episodes}_rewards.csv")
-            self.df_steps.to_csv(f"top_{self.keep_top_n_steps}_{episodes}_steps.csv")        
-        print(f"Finish saving top {self.keep_top_n_steps} results as csv!")
+            self.df_rewards.to_csv(f"./validation/result/top_{self.keep_top_n_steps}_{episodes}_rewards.csv")
+            self.df_steps.to_csv(f"./validation/result/top_{self.keep_top_n_steps}_{episodes}_steps.csv")
+            self.df_worst_rewards.to_csv(f"./validation/result/worst_{self.keep_top_n_steps}_{episodes}_rewards.csv")
+            self.df_worst_steps.to_csv(f"./validation/result/worst_{self.keep_top_n_steps}_{episodes}_steps.csv")        
+        #print(f"Finish saving top {self.keep_top_n_steps} results as csv!")
 
 
+    @class_verbose_logger
     def validate(self):
         # dataframe placeholder to store every iteration step, move, state for analysis
         df_validate_result = pd.DataFrame(
@@ -285,18 +386,16 @@ class SARSA(SARSA):
 
         if self.Q is None:
             # read in the saved model 
-            self.Q = joblib.load('self_crypto.joblib')
+            self.Q = joblib.load('./validation/model/self_crypto.joblib')
             print("Loaded in self model!")
         
         if self.test_data is None: 
-            self.test_data = pd.read_csv("test_data.csv")
+            self.test_data = pd.read_csv("./validation/data/test_data.csv")
             print("Loaded in test data!")
 
         df_preprocessed_test = Preprocessor.preprocessing(self.test_data)
 
         # create the new state table from df_preprocessed test
-
-
         environments_list = []
         total_rewards_list = []
         rewards_list = []
