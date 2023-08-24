@@ -9,6 +9,7 @@ import numpy as np
 import random 
 import joblib
 import logging
+from collections import Counter
 
 
 logger = Constantor.SARSA_LOGGER
@@ -325,12 +326,12 @@ class SARSA(SARSA):
             # print(self.df_worst_rewards.head())
             # print(self.df_worst_steps.head())
     
-            if episode % 1000 == 0 and episode > 0:
+            if episode % 100 == 0 and episode > 0:
                 print("Backing up training model")
                 self.save_model(episodes=episode)
                 self.save_best_n_result(episodes=episode)
 
-            if episode % 1000 == 0 and episode > 0:
+            if episode % 100 == 0 and episode > 0:
                 print(f"Done {episode} episodes")
 
             # total_rewards_list.append(sum(rewards))
@@ -386,71 +387,48 @@ class SARSA(SARSA):
 
         if self.Q is None:
             # read in the saved model 
-            self.Q = joblib.load('./validation/model/self_crypto.joblib')
+            self.Q = joblib.load('./validation/model/sarsa_crypto_backup.joblib')
             print("Loaded in self model!")
         
         if self.test_data is None: 
             self.test_data = pd.read_csv("./validation/data/test_data.csv")
             print("Loaded in test data!")
 
-        df_preprocessed_test = Preprocessor.preprocessing(self.test_data)
+        value_estimates = []
+        value_table = np.max(self.Q, axis=-1)
+        value_step = np.argmax(self.Q, axis=-1).tolist()
+
+        def flatten_array(arr):
+            flat_list = []
+            for item in arr:
+                if isinstance(item, list):
+                    flat_list.extend(flatten_array(item))
+                else:
+                    flat_list.append(item)
+            return flat_list
+
+        flatten_value_steps = flatten_array(value_step)
 
         # create the new state table from df_preprocessed test
-        environments_list = []
-        total_rewards_list = []
-        rewards_list = []
-        steps_list = []
+        df_preprocessed_test, _ = Preprocessor.preprocessing(self.test_data)
+        df_preprocessed_test = df_preprocessed_test[Constantor.STATE_COLUMNS].drop_duplicates()
 
-        for episode in range(self.num_test_episodes):
+        def combine_columns(row):
+            return (row[Constantor.STATE_COLUMNS[0]], row[Constantor.STATE_COLUMNS[1]], row[Constantor.STATE_COLUMNS[2]])
+        df_preprocessed_test['states'] = df_preprocessed_test.apply(combine_columns, axis=1)
+        for _, state in enumerate(df_preprocessed_test['states']):
+            update_state = tuple(value - 1 for value in state)
+            value_estimate = value_table[update_state]
+            value_estimates.append(value_estimate)
 
-            total_rewards = 0
-            steps = []
-            environments = []
-            rewards = []
+        average_value = np.mean(value_estimates)
+        print("Average value estimate:", average_value)
 
-            current_state = (0,0,0)
-            action = np.argmax(self.Q[current_state])
-            rewards_value = self.reward_function[current_state][action]
+        step_counter = Counter(flatten_value_steps)
+        for value, count in step_counter.items():
+            print(f"{value}: {count} times")
 
-            steps.append(action)
-            rewards.append(rewards_value)
-            environments.append(current_state)
-
-            for month in range(0, self.Q.shape[0]):
-                for day in range(0, self.Q.shape[1]):
-                    for time in range(0, self.Q.shape[2]):
-
-                        # only modify the next state to start on 2nd state when the incoming state 
-                        # is (0,0,0,0)
-                        if current_state[:-1] == (0,0,0):
-                            next_state = list(next_state)
-                            next_state[2] = 1
-                            next_state = tuple(next_state) # add 1 to time state if starting from (1,0,0,0) or (0,0,0,0)
-                            #print("In modified next state:", next_state)
-                        else:
-                            next_state = tuple([month, day, time])
-                            #print("In next state:", next_state)
-
-                        next_action, q_value = self.policy(next_state)
-                        rewards_value = self.reward_function[current_state][action]
-
-                        current_state = next_state
-                        action = next_action 
-                        
-                        steps.append(action)
-                        rewards.append(rewards_value)
-                        environments.append(current_state)
-
-                total_rewards += sum(rewards)
-                self.test_value_dict['environments'] = environments
-                self.test_value_dict['total_rewards'] = total_rewards
-                self.test_value_dict['rewards'] = rewards
-                self.test_value_dict['steps'] = steps
-
-            df_validate_result.loc[len(df_validate_result)] = self.test_value_dict
-
-        average_rewards = total_rewards / self.num_test_episodes
-        df_validate_result.to_csv(f'./validation/result_{Utilator.get_formatted_date()}.csv')
-        print(f"Average reward on test data: {average_rewards}") 
+        # df_validate_result.to_csv(f'./validation/result_{Utilator.get_formatted_date()}.csv')
+        # print(f"Average reward on test data: {average_rewards}") 
         
         

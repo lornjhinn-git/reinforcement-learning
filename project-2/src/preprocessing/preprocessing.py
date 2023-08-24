@@ -23,6 +23,7 @@ warnings.filterwarnings("ignore")
 # 3. time (12 am - 12 pm every 5 min)
 # 4. actions (buy, sell, no action)
 
+encoder = LabelEncoder()
 
 def get_day_of_week(df) -> pd.DataFrame:
     """
@@ -148,6 +149,8 @@ def encode_time(df) -> pd.DataFrame:
 
     # Concatenate the hour, minute, and second strings into a single time string
     df['encoded_time'] = df['hour_str'] + '-' + df['minute_str'] + '-' + df['second_str']
+    df['label_encoded_time'] = encoder.fit_transform(df[['encoded_time']])
+
 
     # Drop the original hour, minute, and second columns
     df = df.drop(['hour', 'minute', 'second', 'hour_str', 'minute_str', 'second_str'], axis=1)
@@ -204,7 +207,6 @@ def fill_values(column):
 def create_price_table(df, Q):
     # get the unique value of each column for each state 
     price_array = np.zeros((5,7,288,1))
-    encoder = LabelEncoder()
     df['label_encoded_time'] = encoder.fit_transform(df[['encoded_time']])
     df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
         .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
@@ -240,8 +242,6 @@ def create_reward_table(df_reward_stats, verbose=False) -> tuple[np.array, np.ar
     df_pivoted_rewards['buy_action'] = df_pivoted_rewards['buy_action'].fillna(df_pivoted_rewards['sell_action']*-1)
     df_pivoted_rewards['sell_action'] = df_pivoted_rewards['sell_action'].fillna(df_pivoted_rewards['buy_action']*-1)
     df_pivoted_rewards['no_action'] = 0
-
-    encoder = LabelEncoder()
     df_pivoted_rewards['label_encoded_time'] = encoder.fit_transform(df_pivoted_rewards[['encoded_time']])
 
     # get the unique value of each column for each state 

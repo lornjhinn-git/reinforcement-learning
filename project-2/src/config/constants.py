@@ -129,3 +129,10 @@ SARSA_LOGGER = setup_logger(SARSA_LOG_FILE)
 #     filemode="w+",
 #     format="%(asctime)-15s %(levelname)-8s %(message)s"
 # )
+
+
+STATE_COLUMNS = [
+    'week_of_month',
+    'local_numeric_day',
+    'label_encoded_time'
+]

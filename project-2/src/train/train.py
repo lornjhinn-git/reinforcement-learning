@@ -79,6 +79,5 @@ if __name__ == '__main__':
 	else: 
 		args = parse_arguments()
 		filtered_args = vars(args).copy()
-		#filtered_args.pop('verbose', None)
 		Sarsa = sarsa.SARSA(**filtered_args)
 		train()
