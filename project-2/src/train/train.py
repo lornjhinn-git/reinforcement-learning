@@ -56,7 +56,7 @@ def train():
 	
 	# Split data for train test
 	train_test_split(df)
-	df_preprocessed_train, df_reward_stats = Preprocessor.preprocessing(Sarsa.train_data)
+	df_preprocessed_train, df_reward_stats, _, _, _ = Preprocessor.preprocessing(Sarsa.train_data)
 	_, Sarsa.Q = Preprocessor.create_reward_table(df_reward_stats)
 	Sarsa.price_table = Preprocessor.create_price_table(df_preprocessed_train, Sarsa.Q)
 

@@ -310,4 +310,4 @@ def preprocessing(df) -> pd.DataFrame:
 	# Sarsa.reward_table = reward_table
 	# Sarsa.Q = Q
 
-	return df_preprocessed, df_reward_stats
+	return df_preprocessed, df_reward_stats, df_price_stats, df_volume_stats, df_preprocessed_prices
