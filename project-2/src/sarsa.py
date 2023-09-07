@@ -142,14 +142,8 @@ class SARSA(SARSA):
                 self.purchase_unit > 0 and 
                 self.total_purchase_prices > self.budget
             )
-            # ) or 
-            # (
-            #     # try to sell even no unit
-            #     action == 1 and 
-            #     self.purchase_unit == 0
-            # ) 
         ): # losing money
-            rewards_value = -10
+            rewards_value = -1.1
         else: # no action
             rewards_value = 0
 
@@ -388,47 +382,81 @@ class SARSA(SARSA):
         if self.Q is None:
             # read in the saved model 
             self.Q = joblib.load('./validation/model/sarsa_crypto_backup.joblib')
-            print("Loaded in self model!")
+            print("Loaded in SARSA model!")
         
         if self.test_data is None: 
             self.test_data = pd.read_csv("./validation/data/test_data.csv")
             print("Loaded in test data!")
 
-        value_estimates = []
-        value_table = np.max(self.Q, axis=-1)
-        value_step = np.argmax(self.Q, axis=-1).tolist()
+        df_preprocessed, _, _, _, _ = Preprocessor.preprocessing(self.test_data)
+        self.price_table = Preprocessor.create_price_table(df_preprocessed, self.Q)
 
-        def flatten_array(arr):
-            flat_list = []
-            for item in arr:
-                if isinstance(item, list):
-                    flat_list.extend(flatten_array(item))
+        # reserved only the data that has complete info on price table
+        # the first column will always be the key for retrieve
+        # 7/9/2023 2 scenarios: 
+        # 1. When predicting future without aggregating past price table, will only able to assess the days with complete price table info
+        # 2. If want to able to predict full future data, then need to use newly updated aggregate price table
+        # Thus, in future will need a indicator to decide whether to assess partial or full, if full then average full price table 
+        # without dedicately filter out
+        assess_months_list = (
+            df_preprocessed[Constantor.STATE_COLUMNS].drop_duplicates().groupby(Constantor.STATE_COLUMNS[0])\
+            .nunique().reset_index().query(f"{Constantor.STATE_COLUMNS[1]} == {Constantor.STATE_DICT.get(Constantor.STATE_COLUMNS[1])} and {Constantor.STATE_COLUMNS[2]} == {Constantor.STATE_DICT.get(Constantor.STATE_COLUMNS[2])}")\
+            [Constantor.STATE_COLUMNS[0]].tolist()
+        )
+        df_state = df_preprocessed[Constantor.STATE_COLUMNS].loc[df_preprocessed[Constantor.STATE_COLUMNS[0]].isin(assess_months_list)]
+
+        # transform into state list for evaluation
+        df_state['state_list'] = df_state.apply(lambda row: row.tolist(), axis=1)
+        state_list = df_state['state_list']
+
+        total_profit = 0
+        single_profit = 0
+        total_profit_list = []
+        unit = 0
+        budget = self.budget
+        buy = 0
+        sell = 0
+        no_action = 0
+
+        for state in state_list:
+            state = tuple(state)
+            action = np.argmax(self.Q[state])
+            if action == 0 and budget > self.price_table[state]: # buy
+                budget -= self.price_table[state]
+                total_profit -= self.price_table[state]
+                total_profit_list.append(total_profit)
+                unit += (1*0.998)
+                buy += 1
+            elif action == 1 and unit > 0: # sell
+                budget += unit * self.price_table[state] * 0.998
+                total_profit += unit * self.price_table[state] * 0.998
+                total_profit_list.append(total_profit)
+                # print("Sell price:", self.price_table[state], "total_profit:", total_profit)
+                unit = 0
+                sell += 1
+
+            elif action == 2: # no action
+                no_action += 1
+                pass
+            else:
+                if self.verbose:
+                    if action == 0:
+                        logger.debug(f"Couldnt perform action {Constantor.INDEX_TO_ACTION.get(action)} due to budget = {budget}")
+                    else:
+                        logger.debug(f"Couldnt perform action {Constantor.INDEX_TO_ACTION.get(action)} due to unit = {unit}")
                 else:
-                    flat_list.append(item)
-            return flat_list
+                    pass
 
-        flatten_value_steps = flatten_array(value_step)
+            if self.verbose:
+                logger.debug(f"State: {state} Total profit: {total_profit} Action: {Constantor.INDEX_TO_ACTION.get(action)} Unit: {unit} Price: {self.price_table[state]} Budget: {budget}")
 
-        # create the new state table from df_preprocessed test
-        df_preprocessed_test, _ = Preprocessor.preprocessing(self.test_data)
-        df_preprocessed_test = df_preprocessed_test[Constantor.STATE_COLUMNS].drop_duplicates()
-
-        def combine_columns(row):
-            return (row[Constantor.STATE_COLUMNS[0]], row[Constantor.STATE_COLUMNS[1]], row[Constantor.STATE_COLUMNS[2]])
-        df_preprocessed_test['states'] = df_preprocessed_test.apply(combine_columns, axis=1)
-        for _, state in enumerate(df_preprocessed_test['states']):
-            update_state = tuple(value - 1 for value in state)
-            value_estimate = value_table[update_state]
-            value_estimates.append(value_estimate)
-
-        average_value = np.mean(value_estimates)
-        print("Average value estimate:", average_value)
-
-        step_counter = Counter(flatten_value_steps)
-        for value, count in step_counter.items():
-            print(f"{value}: {count} times")
-
-        # df_validate_result.to_csv(f'./validation/result_{Utilator.get_formatted_date()}.csv')
-        # print(f"Average reward on test data: {average_rewards}") 
-        
-        
+        potential_max_total_profit = [x for x in total_profit_list if x > 0]
+        if self.verbose:
+            logger.debug(f"Len potential max total_profit: {potential_max_total_profit}")
+            if len(potential_max_total_profit) > 0:
+                logger.debug(f"Average total_profit: {sum(potential_max_total_profit)/len(potential_max_total_profit)}")
+            else:
+                logger.debug("No total_profit")
+            logger.debug(f"Unit: {unit} Budget: {budget}, Total Profit: {total_profit}")
+            logger.debug(f"Buy counter: {buy} Sell counter: {sell} No action counter: {no_action}")
+            

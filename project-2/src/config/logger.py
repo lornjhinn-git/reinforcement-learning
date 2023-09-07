@@ -3,7 +3,6 @@ import logging
 
 def verbose_logger(func):
     def wrapper(*args, **kwargs):
-        logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.DEBUG)
         print(f"\nExecuting {func.__name__} function...")
         result = func(*args, **kwargs)
         print(f"Finished executing {func.__name__} function.")

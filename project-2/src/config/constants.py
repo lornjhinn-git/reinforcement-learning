@@ -131,8 +131,16 @@ SARSA_LOGGER = setup_logger(SARSA_LOG_FILE)
 # )
 
 
+# Note: is important to put in sequential order
 STATE_COLUMNS = [
     'week_of_month',
     'local_numeric_day',
     'label_encoded_time'
 ]
+
+# total unique value for each state
+STATE_DICT = {
+    'week_of_month': 5,
+    'local_numeric_day': 7,
+    'label_encoded_time': 288
+}

@@ -30,8 +30,8 @@ def get_day_of_week(df) -> pd.DataFrame:
     Returns the name of the day of the week for the given day number (0-6)
     """
     days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    df['local_numeric_day'] =  df['datetime'].apply(lambda x: (x.weekday()) % 7 + 1)
-    df['local_day'] =  df['local_numeric_day'].apply(lambda x: days[x-1])
+    df['local_numeric_day'] =  df['datetime'].apply(lambda x: (x.weekday()) % 7)
+    df['local_day'] =  df['local_numeric_day'].apply(lambda x: days[x])
     return df 
 
 
@@ -174,7 +174,7 @@ def get_week_of_month(df) -> pd.DataFrame:
     def compute_week_of_month(date_value):
         first_day = date(date_value.year, date_value.month, 1)
         offset = (date_value.weekday() + 1 - first_day.weekday()) % 7
-        week_of_month = (date_value.day + offset - 1) // 7 + 1
+        week_of_month = ((date_value.day + offset - 1) // 7 + 1) -1
         return week_of_month
 
     date_column_name = 'date'
@@ -214,10 +214,11 @@ def create_price_table(df, Q):
 
     # Iterate over the rows of the DataFrame
     for index, row in df.iterrows():
-        week_index = int(row['week_of_month']-1)
-        day_index = int(row['local_numeric_day']-1)
+        week_index = int(row['week_of_month'])
+        day_index = int(row['local_numeric_day'])
         time_index = int(row['label_encoded_time'])
         value = row['average_period_price']
+        if value == 0: print(week_index, day_index, time_index) 
         price_array[week_index, day_index, time_index] = value
 
     return price_array
@@ -259,8 +260,8 @@ def create_reward_table(df_reward_stats, verbose=False) -> tuple[np.array, np.ar
     # start padding reward value into each state respectively
     # Iterate over the rows of the DataFrame
     for index, row in df_pivoted_rewards.iterrows():
-        week_index = int(row['week_of_month']-1)
-        day_index = int(row['local_numeric_day']-1)
+        week_index = int(row['week_of_month'])
+        day_index = int(row['local_numeric_day'])
         time_index = int(row['label_encoded_time'])
         value = [row['buy_action'], row['sell_action'], row['no_action']]
         state_array[week_index, day_index, time_index] = value

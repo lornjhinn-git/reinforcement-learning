@@ -51,21 +51,21 @@ def train_test_split(df):
 def train():
 	engine = create_engine(f'postgresql://postgres:postgres@localhost:5432/{Constantor.DATABASE_NAME}')
 
-	df = pd.read_sql_query(f'select * from {Constantor.TABLE_NAME}',con=engine)\
-			   .query(f"period_type == '{Constantor.PERIOD_TYPE}'").reset_index()
+	# df = pd.read_sql_query(f'select * from {Constantor.TABLE_NAME}',con=engine)\
+	# 		   .query(f"period_type == '{Constantor.PERIOD_TYPE}'").reset_index()
 	
 	# Split data for train test
-	train_test_split(df)
-	df_preprocessed_train, df_reward_stats, _, _, _ = Preprocessor.preprocessing(Sarsa.train_data)
-	_, Sarsa.Q = Preprocessor.create_reward_table(df_reward_stats)
-	Sarsa.price_table = Preprocessor.create_price_table(df_preprocessed_train, Sarsa.Q)
+	# train_test_split(df)
+	# df_preprocessed_train, df_reward_stats, _, _, _ = Preprocessor.preprocessing(Sarsa.train_data)
+	# _, Sarsa.Q = Preprocessor.create_reward_table(df_reward_stats)
+	# Sarsa.price_table = Preprocessor.create_price_table(df_preprocessed_train, Sarsa.Q)
 
 	# print("Sarsa.Q:", Sarsa.Q.shape)
 
-	Sarsa.train(df_preprocessed_train)
-	Sarsa.save_model()
-	Sarsa.save_best_n_result()
-	#Sarsa.validate()
+	# Sarsa.train(df_preprocessed_train)
+	# Sarsa.save_model()
+	# Sarsa.save_best_n_result()
+	Sarsa.validate()
 
 	# df_preprocessed_train.to_csv("./validation/preprocessed_data.csv")
 	# df_reward_stats.to_csv("./validation/reward_stats_data.csv")
