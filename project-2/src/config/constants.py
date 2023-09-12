@@ -119,16 +119,18 @@ def setup_logger(log_file):
     
     return logger
 
-LOG_DIR = './log'
-SARSA_LOG_FILE = os.path.join(LOG_DIR, "sarsa_log.log")
-SARSA_LOGGER = setup_logger(SARSA_LOG_FILE)
-# SARSA_LOG_LEVEL = logging.DEBUG
-# SARSA_LOGGER = logging.basicConfig(
-#     level=logging.DEBUG,
-#     filename = SARSA_LOG_FILENAME,
-#     filemode="w+",
-#     format="%(asctime)-15s %(levelname)-8s %(message)s"
-# )
+def create_log(log_name:str):
+    LOG_DIR = './log'
+    LOG_FILE = os.path.join(LOG_DIR, f"{log_name}.log")
+    LOGGER = setup_logger(LOG_FILE)
+    return LOGGER
+    # SARSA_LOG_LEVEL = logging.DEBUG
+    # SARSA_LOGGER = logging.basicConfig(
+    #     level=logging.DEBUG,
+    #     filename = SARSA_LOG_FILENAME,
+    #     filemode="w+",
+    #     format="%(asctime)-15s %(levelname)-8s %(message)s"
+    # )
 
 
 # Note: is important to put in sequential order

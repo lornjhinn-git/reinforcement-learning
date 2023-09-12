@@ -1,5 +1,5 @@
 # Import general package 
-from ..sarsa import *
+from ..agent import *
 from ..config import constants as Constantor
 from ..config.logger import verbose_logger
 
