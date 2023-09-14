@@ -28,8 +28,6 @@ class RL_Agent:
             purchase_unit=0,
             total_purchase_prices=0,
             purchase_states=[],
-            train_data=None,
-            test_data=None,
             train_value_dict = {
                             'environments': None,
                             'total_rewards': None,
@@ -45,7 +43,8 @@ class RL_Agent:
             keep_top_n_steps=None,
             verbose=None,
             debug=None,
-            rl_algorithm=None
+            model_algorithm=None,
+            price_day_range=None
     ):
         self.learning_rate=0.005 if learning_rate is None else learning_rate
         self.epsilon=0.1 if epsilon is None else epsilon
@@ -61,8 +60,6 @@ class RL_Agent:
         self.purchase_unit=0 if purchase_unit is None else purchase_unit
         self.total_purchase_prices=0 if total_purchase_prices is None else total_purchase_prices
         self.purchase_states=purchase_states
-        self.train_data=train_data
-        self.test_data=test_data
         self.train_value_dict=train_value_dict
         self.test_value_dict=test_value_dict
         self.keep_top_n_steps=100 if keep_top_n_steps is None else keep_top_n_steps
@@ -76,9 +73,10 @@ class RL_Agent:
         self.worst_n_total_rewards = [0]*self.keep_top_n_steps
         self.verbose = False if verbose is None else verbose
         self.debug = False if debug is None else debug
-        self.rl_algorithm = 'Sarsa' if rl_algorithm is None else rl_algorithm
-        self.logger = Constantor.create_log(self.rl_algorithm)
-
+        self.model_algorithm = 'Sarsa' if model_algorithm is None else model_algorithm
+        self.logger = Constantor.create_log(self.model_algorithm)
+        self.price_day_range = None if price_day_range is None else price_day_range
+        self.model_id = Utilator.create_model_id()
 
 
     @class_verbose_logger
@@ -195,10 +193,12 @@ class RL_Agent:
     @class_verbose_logger
     def save_model(self, episodes=None):	
         if episodes is None:
-            joblib.dump(self.Q, f'./validation/model/{self.rl_algorithm}_crypto_{Utilator.get_formatted_date()}.joblib')
-            joblib.dump(self.Q, f'./validation/model/{self.rl_algorithm}_crypto.joblib')
+            joblib.dump(self.Q, f'./validation/model/{self.model_algorithm}_crypto_{Utilator.get_formatted_date()}.joblib')
+            joblib.dump(self.Q, f'./validation/model/{self.model_algorithm}_crypto.joblib')
+            joblib.dump(self.Q, f'./validation/model/{self.model_id}.joblib')
         else:
-            joblib.dump(self.Q, f'./validation/model/{self.rl_algorithm}_crypto_backup.joblib')
+            joblib.dump(self.Q, f'./validation/model/{self.model_algorithm}_crypto_backup.joblib')
+            joblib.dump(self.Q, f'./validation/model/{self.model_id}_backup.joblib')
 
         #print("Finish saving model and values dictionary!")
 
@@ -206,25 +206,25 @@ class RL_Agent:
     @class_verbose_logger
     def save_best_n_result(self, episodes=None):
         if episodes is None:
-            self.df_rewards.to_csv(f"./validation/result/{self.rl_algorithm}_top_{self.keep_top_n_steps}_rewards.csv")
-            self.df_steps.to_csv(f"./validation/result/{self.rl_algorithm}_top_{self.keep_top_n_steps}_steps.csv")
-            self.df_worst_rewards.to_csv(f"./validation/result/{self.rl_algorithm}_worst_{self.keep_top_n_steps}_rewards.csv")
-            self.df_worst_steps.to_csv(f"./validation/result/{self.rl_algorithm}_worst_{self.keep_top_n_steps}_steps.csv")
+            self.df_rewards.to_csv(f"./validation/result/{self.model_algorithm}_top_{self.keep_top_n_steps}_rewards.csv")
+            self.df_steps.to_csv(f"./validation/result/{self.model_algorithm}_top_{self.keep_top_n_steps}_steps.csv")
+            self.df_worst_rewards.to_csv(f"./validation/result/{self.model_algorithm}_worst_{self.keep_top_n_steps}_rewards.csv")
+            self.df_worst_steps.to_csv(f"./validation/result/{self.model_algorithm}_worst_{self.keep_top_n_steps}_steps.csv")
         else: 
-            self.df_rewards.to_csv(f"./validation/result/{self.rl_algorithm}_top_{self.keep_top_n_steps}_{episodes}_rewards.csv")
-            self.df_steps.to_csv(f"./validation/result/{self.rl_algorithm}_top_{self.keep_top_n_steps}_{episodes}_steps.csv")
-            self.df_worst_rewards.to_csv(f"./validation/result/{self.rl_algorithm}_worst_{self.keep_top_n_steps}_{episodes}_rewards.csv")
-            self.df_worst_steps.to_csv(f"./validation/result/{self.rl_algorithm}_worst_{self.keep_top_n_steps}_{episodes}_steps.csv")        
+            self.df_rewards.to_csv(f"./validation/result/{self.model_algorithm}_top_{self.keep_top_n_steps}_{episodes}_rewards.csv")
+            self.df_steps.to_csv(f"./validation/result/{self.model_algorithm}_top_{self.keep_top_n_steps}_{episodes}_steps.csv")
+            self.df_worst_rewards.to_csv(f"./validation/result/{self.model_algorithm}_worst_{self.keep_top_n_steps}_{episodes}_rewards.csv")
+            self.df_worst_steps.to_csv(f"./validation/result/{self.model_algorithm}_worst_{self.keep_top_n_steps}_{episodes}_steps.csv")        
         #print(f"Finish saving top {self.keep_top_n_steps} results as csv!")
 
 
 class Sarsa(RL_Agent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.logger.info(f"{self.rl_algorithm} initialized")
+        self.logger.info(f"{self.model_algorithm} initialized")
 
         if self.debug:
-            self.logger.debug(f"{self.rl_algorithm} initialized attributes:", self.__dict__)
+            self.logger.debug(f"{self.model_algorithm} initialized attributes:", self.__dict__)
 
 
     @class_verbose_logger
@@ -385,15 +385,15 @@ class Sarsa(RL_Agent):
 
         if self.Q is None:
             # read in the saved model 
-            self.Q = joblib.load(f'./validation/model/{self.rl_algorithm}_crypto_backup.joblib')
-            print(f"Loaded in {self.rl_algorithm} model!")
+            self.Q = joblib.load(f'./validation/model/{self.model_algorithm}_crypto_backup.joblib')
+            print(f"Loaded in {self.model_algorithm} model!")
         
         if self.test_data is None: 
             self.test_data = pd.read_csv("./validation/data/test_data.csv")
             print("Loaded in test data!")
 
         df_preprocessed, _, _, _, _ = Preprocessor.preprocessing(self.test_data)
-        self.price_table = Preprocessor.create_price_table(df_preprocessed, self.Q)
+        self.price_table = Preprocessor.create_price_table(df_preprocessed, self.price_day_range)
 
         # reserved only the data that has complete info on price table
         # the first column will always be the key for retrieve
@@ -468,10 +468,10 @@ class Sarsa(RL_Agent):
 class Q_Learning(RL_Agent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.logger.info(f"{self.rl_algorithm} initialized")
+        self.logger.info(f"{self.model_algorithm} initialized")
 
         if self.debug:
-            self.logger.debug(f"{self.rl_algorithm} initialized attributes:", self.__dict__)
+            self.logger.debug(f"{self.model_algorithm} initialized attributes:", self.__dict__)
 
 
     @class_verbose_logger
@@ -589,15 +589,15 @@ class Q_Learning(RL_Agent):
 
         if self.Q is None:
             # read in the saved model 
-            self.Q = joblib.load(f'./validation/model/{self.rl_algorithm}_crypto_backup.joblib')
-            print(f"Loaded in {self.rl_algorithm} model!")
+            self.Q = joblib.load(f'./validation/model/{self.model_algorithm}_crypto_backup.joblib')
+            print(f"Loaded in {self.model_algorithm} model!")
         
         if self.test_data is None: 
             self.test_data = pd.read_csv("./validation/data/test_data.csv")
             print("Loaded in test data!")
 
         df_preprocessed, _, _, _, _ = Preprocessor.preprocessing(self.test_data)
-        self.price_table = Preprocessor.create_price_table(df_preprocessed, self.Q)
+        self.price_table = Preprocessor.create_price_table(df_preprocessed, self.price_day_range)
 
         # reserved only the data that has complete info on price table
         # the first column will always be the key for retrieve

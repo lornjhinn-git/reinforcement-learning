@@ -3,7 +3,7 @@ from ..agent import *
 from ..config import constants as Constantor
 from ..config.logger import verbose_logger
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder 
@@ -204,14 +204,23 @@ def fill_values(column):
     return column[column > 0].values[0]
 
 
-def create_price_table(df, Q):
+def create_price_table(df, price_day_range:int = None):
     # get the unique value of each column for each state 
     price_array = np.zeros((5,7,288,1))
     df['label_encoded_time'] = encoder.fit_transform(df[['encoded_time']])
-    df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
-        .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
-        .mean().reset_index()
-
+    if price_day_range is None:
+        df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
+            .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
+            .mean().reset_index()
+    else:
+        start_date = df['date'].max() - timedelta(days=price_day_range)
+        print("Max date:", df['date'].max())
+        print("Start date:", start_date)
+        df = df[df['date'] >= start_date]
+        df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
+            .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
+            .mean().reset_index()
+        
     # Iterate over the rows of the DataFrame
     for index, row in df.iterrows():
         week_index = int(row['week_of_month'])

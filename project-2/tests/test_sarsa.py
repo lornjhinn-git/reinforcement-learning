@@ -1,4 +1,4 @@
-import src.sarsa as Sarsa
+import src.agent as Agent
 import src.preprocessing.preprocessing as Preprocessor
 import src.config.constants as Constantor
 
@@ -7,7 +7,7 @@ import random
 import joblib
 import numpy as np
 
-sarsa = Sarsa.SARSA()
+sarsa = Agent.Sarsa()
 
 # def test_update_top_n_values():
 #     test_episode = 1 #sarsa.keep_top_n_steps
@@ -147,7 +147,7 @@ def test_validate():
 
     total_profit = 0
     single_profit = 0
-    profit_list = []
+    total_profit_list = []
     unit = 0
     budget = sarsa.budget
     buy = 0
@@ -160,15 +160,15 @@ def test_validate():
         print("State:", state, "Action:", action)
         if action == 0 and budget > sarsa.price_table[state]: # buy
             budget -= sarsa.price_table[state]
-            profit -= sarsa.price_table[state]
-            profit_list.append(profit)
+            total_profit -= sarsa.price_table[state]
+            total_profit_list.append(total_profit)
             unit += (1*0.998)
             buy += 1
         elif action == 1 and unit > 0: # sell
             budget += unit * sarsa.price_table[state] * 0.998
-            profit += unit * sarsa.price_table[state] * 0.998
-            profit_list.append(profit)
-            print("Sell price:", sarsa.price_table[state], "Profit:", profit)
+            total_profit += unit * sarsa.price_table[state] * 0.998
+            total_profit_list.append(total_profit)
+            print("Sell price:", sarsa.price_table[state], "total_profit:", total_profit)
             unit = 0
             sell += 1
 
@@ -182,13 +182,31 @@ def test_validate():
                 print(f"Couldnt perform action {Constantor.INDEX_TO_ACTION.get(action)} due to unit = {unit}")
             pass
 
-        print("Action:", action, "Budget:", budget, "Price:", sarsa.price_table[state], "Total Profit:", profit)
+        print("Action:", action, "Budget:", budget, "Price:", sarsa.price_table[state], "Total total_profit:", total_profit)
 
-    potential_max_profit = [x for x in profit_list if x > 0]
-    print("Len potential max profit:", potential_max_profit)
-    if len(potential_max_profit) > 0:
-        print("Average profit:", sum(potential_max_profit)/len(potential_max_profit))
+    potential_max_total_profit = [x for x in total_profit_list if x > 0]
+    print("Len potential max total_profit:", potential_max_total_profit)
+    if len(potential_max_total_profit) > 0:
+        print("Average total_profit:", sum(potential_max_total_profit)/len(potential_max_total_profit))
     else:
-        print("No profit")
-    print(unit, budget, profit)
+        print("No total_profit")
+    print(unit, budget, total_profit)
     print("Buy counter:", buy, "Sell counter:", sell, "No action counter:", no_action)
+
+
+def test_filter():
+    import pandas as pd
+
+    # Sample list of dictionaries
+    data = [
+        {'name': 'John', 'age': 30},
+        {'name': 'Alice', 'age': 25},
+        pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]}),  # DataFrame
+        {'name': 'Bob', 'age': 28},
+        pd.DataFrame({'X': ['a', 'b', 'c'], 'Y': ['d', 'e', 'f']}),  # DataFrame
+    ]
+
+    # Use a lambda function to filter out DataFrames and objects
+    filtered_data = list(filter(lambda x: isinstance(x, pd.DataFrame) or not isinstance(x, dict), data))
+
+    print(filtered_data)

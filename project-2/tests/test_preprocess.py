@@ -1,13 +1,14 @@
 from src.preprocessing import preprocessing as Preprocessor
 import pandas as pd 
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 from pandas.testing import assert_frame_equal
+from src import agent as Agent
 
 
 print("Begin testing")
-df_train = pd.read_csv("train_data.csv")
-df_test = pd.read_csv("test_data.csv")
+df_train = pd.read_csv("validation/data/train_data.csv")
+df_test = pd.read_csv("validation/data/test_data.csv")
 df_train['datetime'] = df_train['datetime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
 df_test['datetime'] = df_test['datetime'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S'))
 
@@ -87,3 +88,47 @@ def test_convert_str_to_datetime():
     print(f"Type of converted value: {type(converted_value)}")
 
 
+def test_create_price_table():
+    # get the unique value of each column for each state 
+    from sklearn.preprocessing import LabelEncoder 
+    from datetime import timedelta
+    encoder = LabelEncoder()
+
+    ###### Parameters #########
+    day_range = 14
+    df, _, _, _, _ = Preprocessor.preprocessing(df_train)
+    ###########################
+
+
+    # additional for testing: manually converting date from object to datetime format for faster testing
+    df['date'] = df['datetime'].apply(lambda x: x.date())
+
+
+    ########## LOGIC ########################
+    price_array = np.zeros((5,7,288,1))
+    df['label_encoded_time'] = encoder.fit_transform(df[['encoded_time']])
+    if day_range is None:
+        df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
+            .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
+            .mean().reset_index()
+    else:
+        start_date = df['date'].max() - timedelta(days=day_range)
+        print("Max date:", df['datetime'].max())
+        print("Start date:", start_date)
+        df = df[df['date'] >= start_date]
+        df = df[['week_of_month', 'local_numeric_day', 'label_encoded_time', 'average_period_price']]\
+            .groupby(['week_of_month', 'local_numeric_day', 'label_encoded_time'])\
+            .mean().reset_index()
+        
+    # Iterate over the rows of the DataFrame
+    for index, row in df.iterrows():
+        week_index = int(row['week_of_month'])
+        day_index = int(row['local_numeric_day'])
+        time_index = int(row['label_encoded_time'])
+        value = row['average_period_price']
+        if value == 0: print(week_index, day_index, time_index) 
+        price_array[week_index, day_index, time_index] = value
+
+    return price_array
+
+    #############################################
