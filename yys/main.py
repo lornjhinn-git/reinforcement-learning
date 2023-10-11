@@ -93,36 +93,35 @@ def get_player_next_action(
 
 
 def play(episodes=Config.EPISODES, verbose=False):
-    p1_action = random.choice(['r','p', 's'])
-    p2_action = random.choice(['r','p', 's']) 
-
-    p1_value = Config.rps_action_dictionary[p1_action][p2_action]
-    p2_value = Config.rps_action_dictionary[p2_action][p1_action]
-        
-    winner, loser, isTie = get_game_result(p1_value, p2_value)
-
     counter = 0
-    for p1_mindset in Config.game_mindset:
-        for p1_predict_p2_mindset in Config.game_mindset: 
-            for p2_mindset in Config.game_mindset:
-                for p2_predict_p1_mindset in Config.game_mindset: 
-                    # if p1_mindset == "RM" or p2_mindset == "RM" or p1_predict_p2_mindset == "RM" or p2_predict_p1_mindset == "RM":
-                    #     break
+    for p1_action in ['r', 'p', 's']:
+        for p2_action in ['r', 'p', 's']:
+            # p1_action = random.choice(['r','p', 's'])
+            # p2_action = random.choice(['r','p', 's']) 
+            p1_value = Config.rps_action_dictionary[p1_action][p2_action]
+            p2_value = Config.rps_action_dictionary[p2_action][p1_action]
+                
+            winner, loser, isTie = get_game_result(p1_value, p2_value)
 
-                    p1_action = get_player_next_action(1, winner, p1_action, p1_mindset) 
-                    p2_action = get_player_next_action(2, winner, p2_action, p2_mindset) 
+            for p1_mindset in Config.game_mindset:
+                for p1_predict_p2_mindset in Config.game_mindset: 
+                    for p2_mindset in Config.game_mindset:
+                        for p2_predict_p1_mindset in Config.game_mindset: 
 
-                    p1_value = Config.rps_action_dictionary[p1_action][p2_action]
-                    p2_value = Config.rps_action_dictionary[p2_action][p1_action]
+                            p1_action = get_player_next_action(1, winner, p1_action, p1_mindset) 
+                            p2_action = get_player_next_action(2, winner, p2_action, p2_mindset) 
 
-                    winner, loser, isTie = get_game_result(p1_value, p2_value)
-                    counter += 1
+                            p1_value = Config.rps_action_dictionary[p1_action][p2_action]
+                            p2_value = Config.rps_action_dictionary[p2_action][p1_action]
 
-                    if verbose:
-                        print(p1_mindset + '_' + p1_predict_p2_mindset, p2_mindset + '_' + p2_predict_p1_mindset)
-                        print('p1 mindset:', p1_mindset , 'p1_action:', p1_action,  'p2 mindset:', p2_mindset, 'p2 action:', p2_action, 'winner:', winner)
-                        
-    print("Total counter:", counter)
+                            winner, loser, isTie = get_game_result(p1_value, p2_value)
+                            counter += 1
+
+                            if verbose:
+                                print(p1_mindset + '_' + p1_predict_p2_mindset, p2_mindset + '_' + p2_predict_p1_mindset)
+                                print('p1 mindset:', p1_mindset , 'p1_action:', p1_action,  'p2 mindset:', p2_mindset, 'p2 action:', p2_action, 'winner:', winner)
+                                
+            print("Total counter:", counter)
 
 
 
